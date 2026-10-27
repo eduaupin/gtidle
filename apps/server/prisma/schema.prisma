@@ -1,0 +1,108 @@
+// Schema para produção (PostgreSQL). Em dev o servidor usa FileStore (JSON).
+// Para migrar: implemente PrismaStore com a mesma interface de src/store/store.ts.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String?   @unique
+  discordId     String?   @unique
+  googleId      String?   @unique
+  birthDate     DateTime? // verificação de idade (ECA Digital)
+  ageVerifiedAt DateTime?
+  createdAt     DateTime  @default(now())
+  player        Player?
+  orders        Order[]
+}
+
+model Player {
+  id             String    @id @default(uuid())
+  userId         String    @unique
+  user           User      @relation(fields: [userId], references: [id])
+  nick           String    @unique
+  level          Int       @default(1)
+  xp             Float     @default(0)
+  cash           Float     @default(50)
+  diamondsPaid   Int       @default(0) // comprados: os únicos que poderão ser negociados
+  diamondsEarned Int       @default(0) // ganhos jogando: presos à conta
+  heat           Float     @default(0)
+  jailedUntil    DateTime?
+  district       String    @default("periferia")
+  lastTick       DateTime  @default(now())
+  vipUntil       DateTime?
+  turboUntil     DateTime?
+  founder        Boolean   @default(false)
+  starterPack    Boolean   @default(false)
+  passSeason     Int?
+  // Partes do estado que mudam juntas a cada tick ficam em JSON:
+  // robberies, lab, supplies, product, dealing, properties, equipped, stats, rngSeed
+  state          Json
+  cosmetics      PlayerCosmetic[]
+  crewId         String?
+  crew           Crew?     @relation(fields: [crewId], references: [id])
+  updatedAt      DateTime  @updatedAt
+
+  @@index([level])
+}
+
+model PlayerCosmetic {
+  playerId  String
+  itemId    String
+  source    String   // "diamonds" | "pack" | "event" | "pass"
+  createdAt DateTime @default(now())
+  player    Player   @relation(fields: [playerId], references: [id])
+
+  @@id([playerId, itemId])
+}
+
+model Order {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  productId   String
+  priceBRL    Decimal  @db.Decimal(10, 2)
+  status      String   // pending | approved | rejected | refunded
+  provider    String   @default("mercadopago")
+  providerRef String?
+  paymentId   String?  @unique // idempotência do webhook
+  createdAt   DateTime @default(now())
+  approvedAt  DateTime?
+}
+
+/// Gangue de jogadores (guilda) — temporada 2
+model Crew {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  tag       String   @unique
+  bank      Float    @default(0)
+  members   Player[]
+  createdAt DateTime @default(now())
+}
+
+model ChatMessage {
+  id        BigInt   @id @default(autoincrement())
+  channel   String   // global | comercio | crew:<id>
+  playerId  String
+  text      String
+  createdAt DateTime @default(now())
+  deleted   Boolean  @default(false)
+
+  @@index([channel, createdAt])
+}
+
+model ModerationAction {
+  id        String   @id @default(uuid())
+  playerId  String
+  byStaffId String
+  kind      String   // mute | ban | warn
+  reason    String
+  until     DateTime?
+  createdAt DateTime @default(now())
+}

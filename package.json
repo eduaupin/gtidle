@@ -1,0 +1,22 @@
+{
+  "name": "grand-trade-idle",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Idle MMO de crime urbano para navegador, visão de cima estilo 2D clássico",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n servidor,site -c yellow,magenta \"npm:dev:server\" \"npm:dev:web\"",
+    "dev:server": "npm run dev --workspace @gti/server",
+    "dev:web": "npm run dev --workspace @gti/web",
+    "build": "npm run build --workspace @gti/web",
+    "test": "npm test --workspace @gti/server",
+    "typecheck": "tsc -p packages/shared && tsc -p apps/server && tsc -p apps/web"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.5",
+    "typescript": "^5.6.0"
+  }
+}
