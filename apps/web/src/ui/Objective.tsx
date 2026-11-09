@@ -26,7 +26,7 @@ export default function Objective({ p, onClaim, onGo }: { p: PlayerState; onClai
 
   if (!m) {
     return (
-      <section className="objective" aria-label="Objetivo">
+      <section data-tour="objective" className="objective" aria-label="Objetivo">
         <header><small>Objetivo</small></header>
         <h2>{next ? `Chegar ao ${next.name}` : 'Dono da cidade'}</h2>
         <p className="why">{next ? next.description : 'Todos os distritos abertos. Temporada 2 traz o Chefão.'}</p>
@@ -44,7 +44,7 @@ export default function Objective({ p, onClaim, onGo }: { p: PlayerState; onClai
   ].filter(Boolean).join(', ');
 
   return (
-    <section className={`objective ${done ? 'done' : ''}`} aria-label="Objetivo atual">
+    <section data-tour="objective" className={`objective ${done ? 'done' : ''}`} aria-label="Objetivo atual">
       <header>
         <small>Objetivo {p.missionIndex + 1} de {MISSIONS.length}</small>
         <small>{cur}/{goal}</small>

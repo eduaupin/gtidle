@@ -27,6 +27,7 @@ import CityPanel from './ui/CityTab';
 import { PhotoModal, ProfileModal } from './ui/Social';
 import { AccountModal, LoginButtons, RESULT_TEXT } from './ui/Account';
 import { consumeLoginHash } from './auth';
+import Tutorial from './ui/Tutorial';
 
 type Tab = 'assaltos' | 'inventario' | 'lab' | 'imoveis' | 'gangue' | 'visual' | 'base' | 'bonde' | 'cidade' | 'mercado' | 'loja' | 'chat';
 const TABS: [Tab, string, string?][] = [
@@ -57,6 +58,7 @@ function describe(events: GameEvent[]): Omit<LogLine, 'id' | 'at'>[] {
   for (const e of events) {
     if (e.type === 'level_up') out.push({ kind: 'info', text: `Você subiu para o nível ${e.level}` });
     if (e.type === 'downed') out.push({ kind: 'bad', text: e.reason === 'morto' ? 'A gangue foi derrubada e voltou para o esconderijo. Não farma até você mandar de volta (aba Inventário).' : 'Kits médicos acabaram com a vida baixa: a gangue recuou para o esconderijo (aba Inventário).' });
+    if (e.type === 'revived') out.push({ kind: 'good', text: `Clube Rockeiro: a gangue caiu, levantou e voltou a farmar (${e.left} reanimações hoje)` });
     if (e.type === 'kit_used') out.push({ kind: 'info', text: `Kit médico usado: vida ${e.hp}` });
     if (e.type === 'supply_bought') out.push({ kind: 'info', text: `Mercador: ${e.qty} ${e.item === 'ammo' ? 'balas' : 'kits'} por ${formatCash(e.cost)}` });
     if (e.type === 'laundered') out.push({ kind: 'good', text: `Lavou ${formatCash(e.amount)} na hora` });
@@ -143,6 +145,7 @@ export default function App() {
   const [loginErr, setLoginErr] = useState(loginBack?.error ?? '');
   const [nick, setNick] = useState('');
   const [showIntro, setShowIntro] = useState(false);
+  const [tour, setTour] = useState<number | null>(null);
   const [buying, setBuying] = useState<RealMoneyProduct | null>(null);
   const [sharing, setSharing] = useState(false);
   const [showMap, setShowMap] = useState(false);
@@ -197,6 +200,7 @@ export default function App() {
   }, []);
 
   const seenInbox = useRef<Set<string> | null>(null);
+  const tourOffered = useRef(false);
   const apply = useCallback((r: { player: PlayerState; events: GameEvent[] }) => {
     // recados novos (bonde, golpe em equipe, presentes, leilão) entram no diário
     const ids = new Set((r.player.inbox ?? []).map(m => m.id));
@@ -209,6 +213,8 @@ export default function App() {
     setFetchedAt(Date.now());
     pushLog(describe(r.events));
     if (!r.player.seenIntro) setShowIntro(true);
+    // quem já jogava antes do tutorial vê ele uma vez
+    else if (!r.player.tutorialDone && !tourOffered.current) { tourOffered.current = true; setTour(0); }
   }, [pushLog]);
 
   const refresh = useCallback(async () => {
@@ -244,7 +250,13 @@ export default function App() {
     pushLog([{ kind: 'good', text: RESULT_TEXT[loginBack.result] ?? 'Pronto.' }]);
   }, [player, loginBack, pushLog]);
 
-  const closeIntro = () => { setShowIntro(false); if (player && !player.seenIntro) act({ type: 'dismissIntro' }); };
+  const closeIntro = () => {
+    setShowIntro(false);
+    if (player && !player.seenIntro) act({ type: 'dismissIntro' });
+    if (player && !player.tutorialDone) setTour(0); // primeira vez: emenda o tutorial guiado
+  };
+  const tourTab = useCallback((t: string) => setTab(t as Tab), []);
+  const closeTour = (done: boolean) => { setTour(null); setTab('assaltos'); if (player && !player.tutorialDone) act({ type: 'finishTutorial' }); void done; };
   const onPaid = useCallback(() => { refresh(); }, [refresh]);
 
   if (needsLogin) {
@@ -313,8 +325,8 @@ export default function App() {
         </section>
         <div className="side">
           <Objective p={player} onClaim={() => act({ type: 'claimMission' })} onGo={t => setTab(t)} />
-          <div className="sheet">
-            <nav className="tabs" aria-label="Seções">
+          <div className="sheet" data-tour="sheet">
+            <nav className="tabs" aria-label="Seções" data-tour="tabs">
               {TABS.map(([id, label, icon]) => (
                 <button key={id} className={tab === id ? 'tab on' : 'tab'} onClick={() => setTab(id)} aria-current={tab === id}>
                   <Icon name={icon ?? 'i_star'} size={1.15} /><span className="tab-label">{label}</span>{missionTab === id && tab !== id && <span className="dot" aria-label="objetivo aqui" />}
@@ -338,7 +350,8 @@ export default function App() {
         </div>
       </div>
       {toast && <div className="toasts" role="alert"><div className="toast bad">{toast}</div></div>}
-      {showIntro && <Intro onClose={closeIntro} />}
+      {showIntro && <Intro onClose={closeIntro} onTour={() => { setShowIntro(false); setTour(0); }} />}
+      {tour !== null && <Tutorial step={tour} onStep={setTour} onTab={tourTab} onClose={closeTour} />}
       {sharing && <ShareModal p={player} onClose={() => setSharing(false)} />}
       {account && <AccountModal p={player} onClose={() => setAccount(false)}
         onLinked={r => { setAccount(false); pushLog([{ kind: 'good', text: RESULT_TEXT[r] ?? 'Pronto.' }]); refresh(); }}

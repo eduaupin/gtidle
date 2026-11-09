@@ -325,6 +325,10 @@ Regras em `packages/shared/src/content/supply.ts`; venda por dinheiro real em `a
   vendedor a partir do nível 10. O item fica em custódia, o comprador paga por Pix ou cartão e recebe na hora;
   o valor do vendedor fica retido 7 dias. **Saque para o banco desligado** e o RMT em produção só liga com
   `RMT_ENABLED=on`, depois de escolher o intermediário de pagamento e passar por um advogado.
+- **Clube Rockeiro:** reanimação automática (4 por dia: a gangue levanta com vida cheia e continua farmando AFK),
+  -10% no Mercador e +30 espaços na mochila, além dos benefícios antigos.
+- **Tutorial guiado:** 11 passos que destacam cada parte da tela (abre depois da introdução e pelo "Como jogar"),
+  com o guia "No que focar" por fase do jogo.
 - Munição e kits nunca se compram com dinheiro real: pagar para tentar um drop que vale dinheiro real seria caixa
   de recompensa paga.
 

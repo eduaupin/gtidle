@@ -68,6 +68,9 @@ export function jobNeeds(job: { durationSec: number; maxStars: number }, aimPct 
   };
 }
 
+/** Clube Rockeiro: reanimação automática (continua farmando AFK), desconto no Mercador e mochila maior */
+export const VIP_SUPPLY = { revivesPerDay: 4, reviveHp: 100, merchantDiscount: 0.1, extraBag: 30 };
+
 export type DownReason = 'morto' | 'sem_cura';
 export const isDown = (p: PlayerState) => !!p.vitals?.down;
 

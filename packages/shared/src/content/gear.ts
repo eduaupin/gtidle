@@ -238,6 +238,9 @@ export function gearSummary(p: PlayerState): GearSummary {
   return { stats, raw, sets: setList, perks, vehicle };
 }
 
+/** Tamanho da mochila (o Clube Rockeiro ganha espaço extra) */
+export const bagMaxFor = (vip: boolean) => GEAR.bagMax + (vip ? 30 : 0);
+
 /** Atalho: fração do status (0,15 = 15%) */
 export const gearFrac = (p: PlayerState, id: StatId) => gearSummary(p).stats[id] / 100;
 

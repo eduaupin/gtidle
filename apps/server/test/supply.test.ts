@@ -102,6 +102,31 @@ describe('vida, munição e kits', () => {
   });
 });
 
+describe('Clube Rockeiro', () => {
+  it('reanimação automática: levanta e continua farmando, até 4 por dia', () => {
+    const p = setup();
+    p.vipUntil = T + 100 * H;
+    p.vitals.kits = 0; p.vitals.hp = 30; p.vitals.ammo = 3000;
+    p.robberies[0] = { jobId: 'banco', progressSec: 0 };
+    p.robberies[1] = { jobId: null, progressSec: 0 };
+    const ev = advance(p, T + 8 * H);
+    expect(ev.filter(e => e.type === 'revived').length).toBeGreaterThan(0);
+    expect(p.stats.robberiesDone).toBeGreaterThan(2);
+    const all = advance(p, T + 20 * H);
+    const used = p.vitals.revive!.used;
+    expect(used).toBeLessThanOrEqual(4);
+    expect(all.length).toBeGreaterThanOrEqual(0);
+  });
+  it('sem Clube não levanta sozinho', () => {
+    const p = setup();
+    p.vitals.kits = 0; p.vitals.hp = 30; p.vitals.ammo = 3000;
+    p.robberies[0] = { jobId: 'banco', progressSec: 0 };
+    const ev = advance(p, T + 8 * H);
+    expect(ev.some(e => e.type === 'revived')).toBe(false);
+    expect(p.vitals.down).not.toBeNull();
+  });
+});
+
 describe('carros e motos', () => {
   it('classe pela raridade e categoria pelo tipo', () => {
     const p = setup();

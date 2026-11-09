@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   DIAMOND_ITEMS, GEAR, GEAR_SETS, MARKET, PERKS, RMT, STATS, SUPPLY, VEHICLE_CLASSES, bulletPrice, equippedGear, formatBRL,
   formatCash, gearScore, gearSummary, isMelee, kitPrice, merchantValue, repairCost, statText, vehicleCategory,
+  VIP_SUPPLY, bagMaxFor, brDay, isVip,
   type GearSlot, type PlayerState, type RareInstance, type StatId,
 } from '@gti/shared';
 import { api, type RmtView, type StateResponse } from '../api';
@@ -75,7 +76,7 @@ export default function InventoryPanel({ p, act, onState, onGoMarket }: {
         {summary.perks.map(id => { const pk = PERKS.find(x => x.id === id)!; return <p key={id} className="small perk">★ {pk.name}: {pk.text}</p>; })}
       </div>
 
-      <h3>Mochila ({p.inventory.rares.length}/{GEAR.bagMax})</h3>
+      <h3>Mochila ({p.inventory.rares.length}/{bagMaxFor(isVip(p, now))})</h3>
       {msg && <p className={msg.bad ? 'msg bad' : 'msg'}>{msg.text}</p>}
       <div className="chips">
         {FILTERS.map(([id, name]) => <button key={id} className={filter === id ? 'chip active' : 'chip'} onClick={() => setFilter(id)}>{name}</button>)}
@@ -121,7 +122,8 @@ function Vitals({ p, act, now }: { p: PlayerState; act: Act; now: number }) {
   const weapon = p.equipped.weapon ? DIAMOND_ITEMS.find(i => i.id === p.equipped.weapon) : undefined;
   const melee = isMelee(weapon?.weapon?.kind);
   const regenMin = Math.ceil(Math.max(0, SUPPLY.returnHp - v.hp) / SUPPLY.regenPerSec / 60);
-  void now;
+  const vip = isVip(p, now);
+  const usedToday = v.revive?.day === brDay(now) ? v.revive.used : 0;
   return (
     <div className={`card vitals ${v.down ? 'down' : ''}`}>
       <div className="row">
@@ -143,6 +145,11 @@ function Vitals({ p, act, now }: { p: PlayerState; act: Act; now: number }) {
           {v.hp < SUPPLY.returnHp ? ` Precisa de ${SUPPLY.returnHp} de vida: use um kit ou espere ~${regenMin} min.` : ''}
         </p>
       )}
+      <p className={`small ${vip ? '' : 'muted'}`}>
+        {vip
+          ? <>Clube Rockeiro: reanimação automática <b>{VIP_SUPPLY.revivesPerDay - usedToday} de {VIP_SUPPLY.revivesPerDay}</b> hoje. Se a gangue cair, ela levanta sozinha e continua farmando.</>
+          : <>No Clube Rockeiro a gangue levanta sozinha até {VIP_SUPPLY.revivesPerDay} vezes por dia e continua farmando enquanto você está fora.</>}
+      </p>
       {!v.down && Math.floor(v.ammo) <= 0 && !melee && <p className="small warn">Sem bala: golpes de 2★ ou mais só dão certo 1% das vezes.</p>}
       <div className="buy-row">
         <button className="small ghost" disabled={v.kits <= 0 || v.hp >= SUPPLY.maxHp} onClick={() => act({ type: 'useKit' })}>Usar kit (+{SUPPLY.kitHeal})</button>
@@ -153,10 +160,11 @@ function Vitals({ p, act, now }: { p: PlayerState; act: Act; now: number }) {
 }
 
 function Merchant({ p, act }: { p: PlayerState; act: Act }) {
-  const bp = bulletPrice(p.level), kp = kitPrice(p.level);
+  const off = isVip(p, Date.now()) ? 1 - VIP_SUPPLY.merchantDiscount : 1;
+  const bp = Math.max(1, Math.round(bulletPrice(p.level) * off)), kp = Math.max(1, Math.round(kitPrice(p.level) * off));
   return (
     <div className="card merchant">
-      <div className="row"><strong>Mercador</strong><span className="small muted">Só aceita grana do jogo · preços do seu nível</span></div>
+      <div className="row"><strong>Mercador</strong><span className="small muted">Só aceita grana do jogo · preços do seu nível{off < 1 ? ' · -10% Clube' : ''}</span></div>
       <div className="merchant-grid">
         <div>
           <span className="small">Munição · {formatCash(bp)} cada</span>

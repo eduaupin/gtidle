@@ -141,6 +141,8 @@ export interface PlayerState {
   missionIndex: number;
   /** Já viu a introdução do jogo */
   seenIntro: boolean;
+  /** Terminou (ou pulou) o tutorial guiado */
+  tutorialDone?: boolean;
   /** Alerta de polícia em andamento, se houver */
   alert: HeatAlert | null;
   /** Quando o próximo alerta vai aparecer (sorteado pelo servidor) */
@@ -192,6 +194,8 @@ export interface PlayerState {
     down: { reason: 'morto' | 'sem_cura'; at: number } | null;
     /** Compra munição e kits sozinha no Mercador quando acaba (com grana do jogo) */
     autoBuy: boolean;
+    /** Reanimações automáticas do Clube usadas hoje (dia em Brasília) */
+    revive?: { day: string; used: number };
   };
   /** Vendas por dinheiro real: valores retidos e liberados (em reais) */
   rmt: { pending: { amount: number; releaseAt: number; listingId: string }[]; available: number; sold: number; bought: number };
@@ -363,6 +367,7 @@ export type GameEvent =
   | { type: 'laundered'; amount: number }
   | { type: 'robbery_failed'; jobId: string; reason: 'sem_bala' }
   | { type: 'kit_used'; hp: number }
+  | { type: 'revived'; left: number }
   | { type: 'downed'; reason: 'morto' | 'sem_cura' }
   | { type: 'supply_bought'; item: 'ammo' | 'kit'; qty: number; cost: number }
   | { type: 'confiscated'; amount: number; insured: boolean };
@@ -392,6 +397,7 @@ export type Action =
   /** Só VIP: despista sem anúncio e ganha bônus. Quem não é VIP despista pela rota de anúncio. */
   | { type: 'resolveAlertVip' }
   | { type: 'dismissIntro' }
+  | { type: 'finishTutorial' }
   | { type: 'buyCosmetic'; itemId: string; pay: 'cash' | 'diamonds' }
   | { type: 'buyUpgrade'; track: UpgradeTrack }
   | { type: 'buyDecor'; itemId: string; pay: 'cash' | 'diamonds' }

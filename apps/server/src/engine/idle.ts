@@ -4,7 +4,7 @@ import {
   DECOR_ITEMS, DEFAULT_PLACED, DIAMOND_ITEMS, DISTRICTS, DROP_RULES, HEIST_PLANS, PARTS, RARE_ITEMS, emptyInventory, ownsItem, DRUGS, PROPERTIES, ROBBERIES, RULES, STARTER_DECOR, STARTER_ITEMS,
   arsenalMult, equipamentoHeatMult, heatCapFor, starsFor, INSURANCE, LAUNDER, NIGHT, isNight, isLookBurned, oficinaMult,
   cashMult, isJailed, isTurbo, isVip, labLines, lawyerCost, nextRandom, offlineCapMs, robberyModeMult, xpMult, xpToNext,
-  GEAR, MELEE, SUPPLY, bulletPrice, isMelee, jobNeeds, kitPrice, brDay, equippedGear, gearSummary, numberedRarity, rollBase, rollRarity, rollStats,
+  GEAR, MELEE, SUPPLY, VIP_SUPPLY, bagMaxFor, bulletPrice, isMelee, jobNeeds, kitPrice, brDay, equippedGear, gearSummary, numberedRarity, rollBase, rollRarity, rollStats,
   type DrugId, type GameEvent, type PlayerState, type RobberyJob, type RobberyMode,
 } from '@gti/shared';
 
@@ -358,7 +358,7 @@ export function giveRare(p: PlayerState, t: number, events: GameEvent[]) {
 
 /** Entrega um equipamento com status sorteados. `stars` define a raridade; mochila cheia vira peças. */
 export function giveGear(p: PlayerState, stars: number, t: number, events: GameEvent[]) {
-  if (p.inventory.rares.length >= GEAR.bagMax) {
+  if (p.inventory.rares.length >= bagMaxFor(isVip(p, t))) {
     const part = PARTS[Math.floor(rnd(p) * PARTS.length)];
     p.inventory.parts[part.id] += 2;
     events.push({ type: 'drop', kind: 'part', id: part.id, qty: 2 });
@@ -460,7 +460,7 @@ export function buySupplyRaw(p: PlayerState, item: 'ammo' | 'kit', qty: number, 
   const v = p.vitals;
   const room = item === 'ammo' ? SUPPLY.maxAmmo - Math.floor(v.ammo) : SUPPLY.maxKits - v.kits;
   let n = Math.max(0, Math.min(Math.floor(qty), room));
-  const unit = item === 'ammo' ? bulletPrice(p.level) : kitPrice(p.level);
+  const unit = Math.max(1, Math.round((item === 'ammo' ? bulletPrice(p.level) : kitPrice(p.level)) * (isVip(p, Date.now()) ? 1 - VIP_SUPPLY.merchantDiscount : 1)));
   if (soft) n = Math.min(n, Math.floor(p.cash / unit));
   if (n <= 0) return 0;
   const cost = n * unit;
@@ -471,11 +471,26 @@ export function buySupplyRaw(p: PlayerState, item: 'ammo' | 'kit', qty: number, 
   return n;
 }
 
+/** Clube Rockeiro: a gangue levanta sozinha (algumas vezes por dia) e continua farmando AFK */
+function tryRevive(p: PlayerState, t: number, events: GameEvent[]) {
+  if (!isVip(p, t)) return false;
+  const day = brDay(t);
+  const r = p.vitals.revive?.day === day ? p.vitals.revive : { day, used: 0 };
+  if (r.used >= VIP_SUPPLY.revivesPerDay) return false;
+  r.used += 1;
+  p.vitals.revive = r;
+  p.vitals.hp = VIP_SUPPLY.reviveHp;
+  p.vitals.down = null;
+  events.push({ type: 'revived', left: VIP_SUPPLY.revivesPerDay - r.used });
+  return true;
+}
+
 /** Vida: usa kit sozinha; sem kit e machucada recua; zerou, cai. Recolhida, para de farmar. */
 function applyDamage(p: PlayerState, dmg: number, t: number, events: GameEvent[]) {
   const v = p.vitals;
   v.hp = Math.max(0, v.hp - dmg);
   if (v.hp <= 0) {
+    if (tryRevive(p, t, events)) return;
     v.down = { reason: 'morto', at: t };
     events.push({ type: 'downed', reason: 'morto' });
     return;
@@ -488,6 +503,7 @@ function applyDamage(p: PlayerState, dmg: number, t: number, events: GameEvent[]
   if (v.hp < SUPPLY.retreatBelow && v.kits <= 0) {
     autoRestock(p, events);
     if (v.kits > 0) return applyDamage(p, 0, t, events);
+    if (tryRevive(p, t, events)) return;
     v.down = { reason: 'sem_cura', at: t };
     events.push({ type: 'downed', reason: 'sem_cura' });
   }

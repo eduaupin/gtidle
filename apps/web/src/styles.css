@@ -502,3 +502,17 @@ button.danger { background: var(--siren-red); color: #fff; }
 .hud-vitals.low strong { color: #f0b35a; }
 .hud-vitals.down { background: linear-gradient(180deg, #4a1a1a, transparent); }
 .hud-vitals.down strong { color: var(--siren-red); }
+
+/* ---------- tutorial guiado ---------- */
+.tour { position: fixed; inset: 0; z-index: 200; }
+.tour-dim { position: absolute; inset: 0; background: rgba(5,8,14,.72); }
+.tour-spot { position: absolute; border-radius: var(--radius-m); box-shadow: 0 0 0 9999px rgba(5,8,14,.72), 0 0 0 3px var(--sodium); transition: all .25s ease; pointer-events: none; }
+.tour-card { position: absolute; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-m); padding: 0.9rem 1rem; display: grid; gap: 0.45rem; box-shadow: 0 12px 32px rgba(0,0,0,.5); transition: top .25s ease, left .25s ease; }
+.tour-card h3 { font: 800 1.3rem/1.1 var(--display); color: var(--sodium); }
+.tour-card p { font-size: 0.95rem; line-height: 1.4; }
+.tour-dots { display: flex; gap: 0.25rem; }
+.tour-dots span { width: 0.4rem; height: 0.4rem; border-radius: 50%; background: var(--line); }
+.tour-dots span.on { background: var(--sodium); }
+@media (prefers-reduced-motion: reduce) { .tour-spot, .tour-card { transition: none; } }
+.focus-list { margin: 0.3rem 0 0; padding-left: 1.1rem; display: grid; gap: 0.35rem; font-size: 0.9rem; }
+.modal.intro .row { justify-content: flex-end; flex-wrap: wrap; }

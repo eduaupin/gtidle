@@ -21,7 +21,7 @@ export const REAL_MONEY_PRODUCTS: RealMoneyProduct[] = [
     description: 'Compra única. $5.000 para acelerar o começo, 200 diamantes e a "Moto Turbinada".',
     grants: { cash: 5000, diamonds: 200, cosmetics: ['moto_cinquentinha'], starterPack: true } },
   { id: 'vip_monthly', kind: 'vip', name: 'Clube Rockeiro — 30 dias', priceBRL: 14.9, priceUSD: 3.99,
-    description: 'Despista a polícia sem anúncio (+50%), esconderijo de 3 min que volta sozinho, advogado automático, +1 assalto simultâneo, +1 linha no galpão, offline 16 h, +15% grana e XP.',
+    description: 'Reanimação automática (4 por dia: a gangue levanta e continua farmando enquanto você está fora), despista a polícia sem anúncio (+50%), esconderijo de 3 min que volta sozinho, advogado automático, +1 assalto simultâneo, +1 linha no galpão, offline 16 h, +15% grana e XP, -10% no Mercador e +30 espaços na mochila.',
     grants: { vipDays: 30 } },
   { id: 'vip_quarterly', kind: 'vip', name: 'Clube Rockeiro — 90 dias', priceBRL: 34.9, priceUSD: 9.99,
     description: 'O mesmo do mensal, por três meses.', grants: { vipDays: 90 } },

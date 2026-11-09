@@ -42,14 +42,14 @@ export default function Hud({ player: p, onLawyer, onShop, onHelp, onShare, onMa
         <div className="bar"><div style={{ width: `${Math.min(100, (p.xp / need) * 100)}%` }} /></div>
       </div>
 
-      <div className="hud-stat">
+      <div className="hud-stat" data-tour="cash">
         <small>Grana</small>
         <strong className="cash with-icon"><Icon name="i_cash" size={1.25} />{formatCash(p.cash)}</strong>
         {p.dirtyCash >= 1 && <button className="dirty-chip" onClick={onDirty} title="Grana suja: os negócios lavam aos poucos (aba Imóveis)">+{formatCash(p.dirtyCash)} sujo</button>}
       </div>
 
       {p.vitals && (
-        <button className={`hud-stat hud-vitals ${p.vitals.down ? 'down' : p.vitals.hp < 40 || p.vitals.ammo < 20 ? 'low' : ''}`} onClick={onInventory}
+        <button data-tour="vitals" className={`hud-stat hud-vitals ${p.vitals.down ? 'down' : p.vitals.hp < 40 || p.vitals.ammo < 20 ? 'low' : ''}`} onClick={onInventory}
           title="Vida, munição e kits médicos (aba Inventário)">
           <small>{p.vitals.down ? 'No esconderijo' : 'Vida · balas · kits'}</small>
           <strong>{Math.round(p.vitals.hp)} · {Math.floor(p.vitals.ammo)} · {p.vitals.kits}</strong>
@@ -68,7 +68,7 @@ export default function Hud({ player: p, onLawyer, onShop, onHelp, onShare, onMa
         <strong className="with-icon"><Icon name="i_diamond" size={1.25} />{totalDiamonds(p)}</strong>
       </button>
 
-      <div className={`hud-stat hud-heat ${stars ? `wanted w${stars}` : ''}`} title={`Procurado ${Math.round(p.heat)} de 100. ${level.effect} Com 100 você vai preso por 10 minutos.`}>
+      <div data-tour="heat" className={`hud-stat hud-heat ${stars ? `wanted w${stars}` : ''}`} title={`Procurado ${Math.round(p.heat)} de 100. ${level.effect} Com 100 você vai preso por 10 minutos.`}>
         <small>{jailed ? 'Preso' : stars ? level.name : 'Procurado'}</small>
         <div className="row">
           <span className="stars" aria-label={`${stars} de ${MAX_STARS} estrelas`}>
@@ -90,7 +90,7 @@ export default function Hud({ player: p, onLawyer, onShop, onHelp, onShare, onMa
       <button className="help" onClick={onShare}>Compartilhar</button>
       <button className="help" onClick={onPhoto}>Foto</button>
       <button className="help" onClick={onProfile}>Ficha</button>
-      <button className={`help ${(p.accounts ?? []).length ? '' : 'alert-dot'}`} onClick={onAccount} title={(p.accounts ?? []).length ? 'Sua conta' : 'Convidado: ligue Google ou Discord para não perder o jogo'}>Conta</button>
+      <button data-tour="account" className={`help ${(p.accounts ?? []).length ? '' : 'alert-dot'}`} onClick={onAccount} title={(p.accounts ?? []).length ? 'Sua conta' : 'Convidado: ligue Google ou Discord para não perder o jogo'}>Conta</button>
       <button className="help" onClick={onHelp}>Como jogar</button>
     </header>
   );

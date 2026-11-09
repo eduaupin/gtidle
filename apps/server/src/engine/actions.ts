@@ -341,6 +341,10 @@ export function applyAction(p: PlayerState, a: Action, now: number): GameEvent[]
       if (left > 0) fail(`Ainda está quente lá fora. Faltam ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}.`);
       return leaveHideout(p, now, false);
     }
+    case 'finishTutorial': {
+      p.tutorialDone = true;
+      return;
+    }
     case 'dismissIntro': {
       p.seenIntro = true;
       return;
