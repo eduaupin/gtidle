@@ -458,3 +458,37 @@ button.pay-pix { background: var(--pix); color: #04201d; }
 .help.alert-dot { position: relative; }
 .help.alert-dot::after { content: ''; position: absolute; top: 2px; right: 2px; width: 8px; height: 8px; border-radius: 50%; background: var(--siren-red); }
 button.danger { background: var(--siren-red); color: #fff; }
+
+/* ---------- inventário ---------- */
+.inventory .vitals.down { border-left: 4px solid var(--siren-red); }
+.hp-bar { position: relative; height: 1.3rem; border-radius: 99px; background: var(--asphalt); overflow: hidden; margin: 0.4rem 0; }
+.hp-bar > div { height: 100%; background: #4caf50; transition: width .4s; }
+.hp-bar > div.mid { background: #e0a43a; }
+.hp-bar > div.low { background: var(--siren-red); }
+.hp-bar span { position: absolute; inset: 0; display: grid; place-items: center; font: 700 0.78rem/1 var(--body); text-shadow: 0 1px 2px #000; }
+.vitals-row { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; align-items: baseline; font-size: 0.9rem; }
+.warn { color: #f0b35a; }
+.merchant-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0.6rem; margin-top: 0.4rem; }
+.merchant-grid .buy-row { margin-top: 0.25rem; }
+.inv-layout { display: grid; grid-template-columns: 1fr; gap: 0.8rem; }
+.inv-detail { order: -1; }
+.inv-detail { position: sticky; top: 0; z-index: 2; box-shadow: 0 6px 16px rgba(0,0,0,.35); background: var(--surface-2); border-radius: var(--radius-s); padding: 0.6rem; min-height: 6rem; }
+.gear-pick { all: unset; display: block; cursor: pointer; border-radius: var(--radius-s); }
+.gear-pick:focus-visible { outline: 2px solid var(--sodium); }
+.gear-pick.sel .gear-card { box-shadow: inset 0 0 0 2px #9fb6ff; }
+.veh-line { font-size: 0.75rem; color: #9fb6ff; }
+.item-detail { display: grid; gap: 0.5rem; }
+.sell-modes { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.sell-box { background: var(--asphalt); border-radius: var(--radius-s); padding: 0.5rem; display: grid; gap: 0.4rem; }
+.sell-box input { width: 100%; }
+.rmt-mine .wallet { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem; margin: 0.4rem 0; }
+.rmt-mine .wallet div { background: var(--surface-2); border-radius: var(--radius-s); padding: 0.35rem 0.5rem; display: flex; flex-direction: column; }
+.rmt-mine .wallet small { color: var(--muted); font-size: 0.72rem; }
+.rmt-list { list-style: none; margin: 0.4rem 0 0; padding: 0; display: grid; gap: 0.3rem; font-size: 0.85rem; }
+.rmt-list li { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.rmt-list li > span:first-child { flex: 1 1 10rem; }
+.rmt-shop { margin: 0.6rem 0; }
+.price-brl { font: 700 1.05rem/1 var(--display); color: #7ee08a; }
+.hud-vitals.low strong { color: #f0b35a; }
+.hud-vitals.down { background: linear-gradient(180deg, #4a1a1a, transparent); }
+.hud-vitals.down strong { color: var(--siren-red); }

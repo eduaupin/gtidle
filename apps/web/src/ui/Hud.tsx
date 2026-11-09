@@ -16,9 +16,9 @@ function countdown(to: number, now: number) {
   return d > 0 ? `${d}d ${h}h ${m}min` : `${h}h ${m}min ${s % 60}s`;
 }
 
-export default function Hud({ player: p, onLawyer, onShop, onHelp, onShare, onMap, onPhoto, onProfile, onDirty, onAccount }: {
+export default function Hud({ player: p, onLawyer, onShop, onHelp, onShare, onMap, onPhoto, onProfile, onDirty, onAccount, onInventory }: {
   player: PlayerState; onLawyer: () => void; onShop: () => void; onHelp: () => void; onShare: () => void; onMap: () => void;
-  onPhoto: () => void; onProfile: () => void; onDirty: () => void; onAccount: () => void;
+  onPhoto: () => void; onProfile: () => void; onDirty: () => void; onAccount: () => void; onInventory: () => void;
 }) {
   const now = useNow();
   const stars = starsFor(p.heat);
@@ -47,6 +47,14 @@ export default function Hud({ player: p, onLawyer, onShop, onHelp, onShare, onMa
         <strong className="cash with-icon"><Icon name="i_cash" size={1.25} />{formatCash(p.cash)}</strong>
         {p.dirtyCash >= 1 && <button className="dirty-chip" onClick={onDirty} title="Grana suja: os negócios lavam aos poucos (aba Imóveis)">+{formatCash(p.dirtyCash)} sujo</button>}
       </div>
+
+      {p.vitals && (
+        <button className={`hud-stat hud-vitals ${p.vitals.down ? 'down' : p.vitals.hp < 40 || p.vitals.ammo < 20 ? 'low' : ''}`} onClick={onInventory}
+          title="Vida, munição e kits médicos (aba Inventário)">
+          <small>{p.vitals.down ? 'No esconderijo' : 'Vida · balas · kits'}</small>
+          <strong>{Math.round(p.vitals.hp)} · {Math.floor(p.vitals.ammo)} · {p.vitals.kits}</strong>
+        </button>
+      )}
 
       {isNight(now) && (
         <div className="hud-stat hud-night" title={`Das ${NIGHT.from} h às ${NIGHT.to} h (Brasília): assaltos pagam +${Math.round((NIGHT.cashMult - 1) * 100)}% e chamam +${Math.round((NIGHT.heatMult - 1) * 100)}% de polícia`}>

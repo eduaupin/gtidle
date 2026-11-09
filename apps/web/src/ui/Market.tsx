@@ -9,6 +9,7 @@ import { showRewardedAd } from '../ads';
 import { DecorThumb, ItemPreview } from './Preview';
 import Icon from './Icon';
 import AuctionSection from './Auction';
+import RmtShop from './RmtShop';
 import { GearStats, RarityTag, gearName } from './Gear';
 import { gearScore } from '@gti/shared';
 import { useNow } from './Hud';
@@ -183,6 +184,7 @@ export default function MarketPanel({ p, onState, onVip }: { p: PlayerState; onS
         })}
       </div>
 
+      <RmtShop p={p} onState={onState} />
       <AuctionSection p={p} onState={onState} />
 
       <h3>Vender da mochila</h3>

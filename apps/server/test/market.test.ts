@@ -26,7 +26,7 @@ describe('drops dos assaltos', () => {
     p.level = 30; p.district = 'centro'; p.nextAlertAt = T0 + 999 * H;
     p.robberies[0] = { jobId: 'banco', progressSec: 0 };
     p.vipUntil = T0 + 100 * H; // dois espaços e advogado automático
-    p.cash = 1e9;
+    p.cash = 1e9; p.vitals.autoBuy = true; // munição e kits no automático
     advance(p, T0 + 8 * H);
     const parts = Object.values(p.inventory.parts).reduce((a, b) => a + b, 0);
     expect(parts).toBeGreaterThan(5);
@@ -35,6 +35,7 @@ describe('drops dos assaltos', () => {
   it('raro sai com número de série único e acaba quando a tiragem acaba', () => {
     const p = newPlayer('a', 'x', T0);
     const ev: never[] = [];
+    p.inventory.rares = [];
     for (let i = 0; i < 30; i++) giveRare(p, T0, ev);
     const uids = new Set(p.inventory.rares.map(r => r.uid));
     expect(uids.size).toBe(p.inventory.rares.length);
@@ -130,6 +131,8 @@ describe('mercado', () => {
   it('raro vendido troca de dono com o mesmo número de série e sai do visual do vendedor', () => {
     const { store, seller, buyer } = two();
     giveRare(seller, T0, []);
+    seller.inventory.rares = seller.inventory.rares.filter(r => !r.bound);
+    buyer.inventory.rares = buyer.inventory.rares.filter(r => !r.bound);
     const rare = seller.inventory.rares[0];
     const item = RARE_ITEMS.find(i => i.id === rare.itemId)!;
     applyAction(seller, { type: 'equip', itemId: rare.itemId }, T0);

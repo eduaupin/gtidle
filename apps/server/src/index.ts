@@ -3,9 +3,10 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { Server as SocketServer } from 'socket.io';
 import { randomUUID } from 'node:crypto';
-import { BRAND, MARKET, REAL_MONEY_PRODUCTS, ROBBERIES, RULES, STAR_HEAT, isLookBurned, isVip, priceIn, type Action, type Currency, type PlayerState } from '@gti/shared';
+import { BRAND, DIAMOND_ITEMS, MARKET, REAL_MONEY_PRODUCTS, ROBBERIES, RULES, STAR_HEAT, isLookBurned, isVip, priceIn, type Action, type Currency, type PlayerState, type RealMoneyProduct } from '@gti/shared';
 import { advance, burnLook, giveGear, giveRare, migrate, newPlayer, normalizeSlots, resolveAlert, setAfterAdvance, setSerialAllocator, setTerritoryBonus } from './engine/idle';
 import * as social from './social';
+import * as rmt from './rmt';
 import { buyListing, cancelListing, listItem, marketView, sweepExpired, type ListRequest } from './market';
 import { applyAction, applyGrant, canBuyProduct, GameError } from './engine/actions';
 import { FileStore } from './store/store';
@@ -78,6 +79,7 @@ function rateLimit(id: string, max = 20, windowMs = 5000) {
 
 app.setErrorHandler((err: Error & { statusCode?: number }, _req, reply) => {
   if (err instanceof social.SocialError) return reply.code(400).send({ error: err.message });
+  if (err instanceof rmt.RmtError) return reply.code(400).send({ error: err.message });
   if (err instanceof accounts.AuthError) return reply.code(401).send({ error: err.message });
   if (err instanceof GameError) return reply.code(400).send({ error: err.message });
   const code = err.statusCode ?? 500;
@@ -220,6 +222,10 @@ app.post('/api/team/create', async (req) => socialReply(req, (p, now) => { socia
 app.post('/api/team/join', async (req) => socialReply(req, (p, now) => { social.joinTeam(store, p, body(req).code, body(req).role, now); return social.teamView(store, p, now); }));
 app.post('/api/team/leave', async (req) => socialReply(req, (p, now) => { social.leaveTeam(store, p); return social.teamView(store, p, now); }));
 
+app.get('/api/rmt', async (req) => socialReply(req, (p, now) => rmt.rmtView(store, p, now), false));
+app.post('/api/rmt/list', async (req) => socialReply(req, (p, now) => { rmt.listRmt(store, p, body(req).uid, body(req).price, now); return rmt.rmtView(store, p, now); }));
+app.post('/api/rmt/cancel', async (req) => socialReply(req, (p, now) => { rmt.cancelRmt(store, p, body(req).id, now); return rmt.rmtView(store, p, now); }));
+
 app.get('/api/news', async () => ({ news: social.newsFeed(store) }));
 
 app.get('/api/race', async (req) => socialReply(req, (p, now) => social.raceBoard(store, p, now), false));
@@ -254,6 +260,7 @@ setInterval(() => {
   const now = Date.now();
   social.sweepTeams(store, now);
   social.sweepAuctions(store, now);
+  rmt.sweepRmt(store, now);
   social.settleTerritories(store, now);
 }, 30_000).unref();
 
@@ -424,11 +431,11 @@ const badRequest = (msg: string) => Object.assign(new Error(msg), { statusCode: 
 app.post('/api/shop/pix', async (req) => {
   const p = authed(req);
   rateLimit(p.id, 5, 60_000);
-  const { productId, email, giftTo } = req.body as { productId: string; email: string; giftTo?: string };
+  const { productId, email, giftTo, rmtListingId } = req.body as { productId: string; email: string; giftTo?: string; rmtListingId?: string };
   if (!EMAIL_RE.test(String(email ?? ''))) throw badRequest('Informe um e-mail válido');
-  const gift = giftTarget(p, giftTo);
-  const prod = canBuyProduct(gift ?? p, productId, Date.now());
+  const gift = rmtListingId ? undefined : giftTarget(p, giftTo);
   const orderId = randomUUID();
+  const prod = rmtListingId ? rmtProduct(p, rmtListingId, orderId, 30 * 60_000) : canBuyProduct(gift ?? p, productId, Date.now());
   const pix = await createPix({ orderId, amount: prod.priceBRL, description: `${BRAND.name} - ${prod.name}`, email });
   store.createOrder({
     id: orderId, playerId: p.id, productId: prod.id, amount: prod.priceBRL, currency: 'BRL', provider: 'mercadopago',
@@ -445,13 +452,15 @@ app.post('/api/shop/pix', async (req) => {
 app.post('/api/shop/card', async (req) => {
   const p = authed(req);
   rateLimit(p.id, 5, 60_000);
-  const { productId, currency, email, giftTo } = req.body as { productId: string; currency: Currency; email?: string; giftTo?: string };
+  const { productId, email, giftTo, rmtListingId } = req.body as { productId: string; currency: Currency; email?: string; giftTo?: string; rmtListingId?: string };
+  // RMT é sempre em reais
+  const currency: Currency = rmtListingId ? 'BRL' : (req.body as { currency: Currency }).currency;
   if (currency !== 'BRL' && currency !== 'USD') throw badRequest('Moeda inválida');
   if (email && !EMAIL_RE.test(email)) throw badRequest('Informe um e-mail válido');
-  const gift = giftTarget(p, giftTo);
-  const prod = canBuyProduct(gift ?? p, productId, Date.now());
-  const amount = priceIn(prod, currency);
+  const gift = rmtListingId ? undefined : giftTarget(p, giftTo);
   const orderId = randomUUID();
+  const prod = rmtListingId ? rmtProduct(p, rmtListingId, orderId, 24 * 3600_000) : canBuyProduct(gift ?? p, productId, Date.now());
+  const amount = priceIn(prod, currency);
   const checkout = await createCardCheckout({ orderId, amount, currency, productName: `${BRAND.name} - ${prod.name}`, email });
   store.createOrder({
     id: orderId, playerId: p.id, productId: prod.id, amount, currency, provider: 'stripe',
@@ -475,8 +484,17 @@ app.get('/api/shop/order/:id', async (req) => {
   const fresh = store.getOrder(order.id)!;
   const expired = fresh.status === 'pending' && fresh.expiresAt !== undefined && Date.now() > fresh.expiresAt;
   const prod = REAL_MONEY_PRODUCTS.find(x => x.id === fresh.productId);
-  return { status: expired ? 'expired' : fresh.status, productName: prod?.name ?? '', amount: fresh.amount, currency: fresh.currency };
+  const rmtItem = fresh.productId.startsWith('rmt:') ? rmt.rmtListing(store, fresh.productId.slice(4)) : undefined;
+  return { status: expired ? 'expired' : fresh.status, productName: prod?.name ?? (rmtItem ? DIAMOND_ITEMS.find(i => i.id === rmtItem.item.itemId)?.name ?? 'Item' : ''), amount: fresh.amount, currency: fresh.currency };
 });
+
+/** Compra de item de outro jogador por dinheiro real: reserva o anúncio e devolve um "produto" com o preço */
+function rmtProduct(p: PlayerState, listingId: string, orderId: string, holdMs: number) {
+  const now = Date.now();
+  const l = rmt.reserveRmt(store, p, listingId, orderId, now + holdMs, now);
+  const name = DIAMOND_ITEMS.find(i => i.id === l.item.itemId)?.name ?? 'Item';
+  return { id: `rmt:${l.id}`, name: `${name} (de ${l.sellerNick})`, priceBRL: l.price, priceUSD: l.price, kind: 'rmt', grants: {} } as unknown as RealMoneyProduct;
+}
 
 /** Presente pago: quem recebe (pelo código da ficha ou nick). Só produtos de Clube e diamantes. */
 function giftTarget(p: PlayerState, giftTo?: string) {
@@ -515,6 +533,15 @@ function fulfillOrder(orderId: string) {
   const order = store.getOrder(orderId);
   if (!order || order.status === 'approved') return; // idempotente: webhook pode chegar repetido
   const buyer = store.getPlayer(order.playerId);
+  if (order.productId.startsWith('rmt:')) {
+    // item de outro jogador: entrega o item e credita o vendedor
+    const ok = rmt.completeRmt(store, order.productId.slice(4), order.id, order.playerId, Date.now());
+    order.status = 'approved';
+    store.updateOrder(order);
+    if (!ok) app.log.error({ orderId: order.id }, 'RMT pago mas o anúncio não estava mais disponível: devolver o dinheiro');
+    if (buyer) io.to(buyer.id).emit('purchase', { productId: order.productId });
+    return;
+  }
   const p = order.giftTo ? store.getPlayer(order.giftTo) : buyer;
   const prod = REAL_MONEY_PRODUCTS.find(x => x.id === order.productId);
   if (!p || !prod) return;

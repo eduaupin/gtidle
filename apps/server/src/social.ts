@@ -476,6 +476,7 @@ export function createAuction(s: Store, p: PlayerState, uid: unknown, start: unk
   if (!Number.isFinite(price) || price < AUCTION.minStart || price > MARKET.maxPrice) fail(`Lance inicial entre ${AUCTION.minStart} e ${MARKET.maxPrice} diamantes`);
   const idx = p.inventory.rares.findIndex(r => r.uid === uid);
   if (idx < 0) fail('Você não tem esse item');
+  if (p.inventory.rares[idx].bound) fail('Item inicial: preso à conta, não vai a leilão');
   const [rare] = p.inventory.rares.splice(idx, 1);
   for (const k of Object.keys(p.gearOn) as (keyof typeof p.gearOn)[]) if (p.gearOn[k] === rare.uid) delete p.gearOn[k];
   const e = p.equipped;

@@ -59,6 +59,7 @@ export function listItem(store: Store, p: PlayerState, req: ListRequest, now: nu
   if (req.kind === 'rare') {
     const idx = p.inventory.rares.findIndex(r => r.uid === req.uid);
     if (idx < 0) fail('Você não tem esse item');
+    if (p.inventory.rares[idx].bound) throw new MarketError('Item inicial: preso à conta, não dá para vender');
     const [rare] = p.inventory.rares.splice(idx, 1);
     for (const k of Object.keys(p.gearOn) as (keyof typeof p.gearOn)[]) if (p.gearOn[k] === rare.uid) delete p.gearOn[k];
     unequipIfGone(p, rare.itemId);

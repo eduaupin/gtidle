@@ -22,14 +22,15 @@ import WorldMap from './ui/WorldMap';
 import MarketPanel from './ui/Market';
 import Icon from './ui/Icon';
 import CrewPanel from './ui/Crew';
+import InventoryPanel from './ui/Inventory';
 import CityPanel from './ui/CityTab';
 import { PhotoModal, ProfileModal } from './ui/Social';
 import { AccountModal, LoginButtons, RESULT_TEXT } from './ui/Account';
 import { consumeLoginHash } from './auth';
 
-type Tab = 'assaltos' | 'lab' | 'imoveis' | 'gangue' | 'visual' | 'base' | 'bonde' | 'cidade' | 'mercado' | 'loja' | 'chat';
+type Tab = 'assaltos' | 'inventario' | 'lab' | 'imoveis' | 'gangue' | 'visual' | 'base' | 'bonde' | 'cidade' | 'mercado' | 'loja' | 'chat';
 const TABS: [Tab, string, string?][] = [
-  ['assaltos', 'Assaltos', 'i_car'], ['lab', 'Galpão', 'i_lab'], ['imoveis', 'Imóveis', 'i_trophy'], ['gangue', 'Gangue', 'i_badge'],
+  ['assaltos', 'Assaltos', 'i_car'], ['inventario', 'Inventário', 'i_badge'], ['lab', 'Galpão', 'i_lab'], ['imoveis', 'Imóveis', 'i_trophy'], ['gangue', 'Gangue', 'i_badge'],
   ['visual', 'Visual', 'i_crown'], ['base', 'Base', 'i_house'], ['bonde', 'Bonde'], ['cidade', 'Cidade'],
   ['mercado', 'Mercado', 'i_gem_badge'], ['loja', 'Loja', 'i_diamond'], ['chat', 'Chat'],
 ];
@@ -40,12 +41,14 @@ interface LogLine { id: number; at: number; text: string; kind: 'good' | 'bad' |
 function describe(events: GameEvent[]): Omit<LogLine, 'id' | 'at'>[] {
   const out: Omit<LogLine, 'id' | 'at'>[] = [];
   const robbed = events.filter((e): e is Extract<GameEvent, { type: 'robbery_done' }> => e.type === 'robbery_done');
+  const failed = events.filter(e => e.type === 'robbery_failed').length;
   if (robbed.length) {
     const cash = robbed.reduce((s, e) => s + e.cash, 0);
     const name = [...ROBBERIES, ...HEIST_PLANS].find(r => r.id === robbed[0].jobId)?.name ?? 'Assalto';
     const dirty = robbed.some(e => e.dirty);
     out.push({ kind: 'good', text: (robbed.length > 1 ? `${robbed.length} assaltos renderam ${formatCash(cash)}` : `${name}: ${formatCash(cash)}`) + (dirty ? ' (grana suja)' : '') });
   }
+  if (failed) out.push({ kind: 'bad', text: `${failed > 1 ? `${failed} golpes falharam` : 'Golpe falhou'}: sem bala (só 1% dá certo). Compre munição no Inventário.` });
   const sold = events.filter((e): e is Extract<GameEvent, { type: 'sold' }> => e.type === 'sold');
   if (sold.length) {
     const units = sold.reduce((s, e) => s + e.units, 0), cash = sold.reduce((s, e) => s + e.cash, 0);
@@ -53,6 +56,9 @@ function describe(events: GameEvent[]): Omit<LogLine, 'id' | 'at'>[] {
   }
   for (const e of events) {
     if (e.type === 'level_up') out.push({ kind: 'info', text: `Você subiu para o nível ${e.level}` });
+    if (e.type === 'downed') out.push({ kind: 'bad', text: e.reason === 'morto' ? 'A gangue foi derrubada e voltou para o esconderijo. Não farma até você mandar de volta (aba Inventário).' : 'Kits médicos acabaram com a vida baixa: a gangue recuou para o esconderijo (aba Inventário).' });
+    if (e.type === 'kit_used') out.push({ kind: 'info', text: `Kit médico usado: vida ${e.hp}` });
+    if (e.type === 'supply_bought') out.push({ kind: 'info', text: `Mercador: ${e.qty} ${e.item === 'ammo' ? 'balas' : 'kits'} por ${formatCash(e.cost)}` });
     if (e.type === 'laundered') out.push({ kind: 'good', text: `Lavou ${formatCash(e.amount)} na hora` });
     if (e.type === 'confiscated') out.push({ kind: 'bad', text: `A polícia apreendeu ${formatCash(e.amount)} de grana suja${e.insured ? ' (o seguro segurou o resto)' : ''}` });
     if (e.type === 'jailed') out.push({ kind: 'bad', text: 'A polícia te pegou. 10 minutos preso.' });
@@ -269,7 +275,7 @@ export default function App() {
     <div className="app">
       <Hud player={player} onLawyer={() => act({ type: 'payLawyer' })} onShop={() => setTab('loja')} onHelp={() => setShowIntro(true)} onShare={() => setSharing(true)} onMap={() => setShowMap(true)}
         onPhoto={() => setPhoto(true)} onProfile={() => setProfileCode(player.referral.code)} onDirty={() => setTab('imoveis')}
-        onAccount={() => setAccount(true)} />
+        onAccount={() => setAccount(true)} onInventory={() => setTab('inventario')} />
       <div className="layout">
         <section className="map" aria-label="Mapa">
           <CityCanvas player={player} fetchedAt={fetchedAt}
@@ -324,6 +330,7 @@ export default function App() {
             {tab === 'gangue' && <GangPanel p={player} act={act} onShare={() => setSharing(true)} />}
           {tab === 'visual' && <LookPanel p={player} act={act} />}
           {tab === 'base' && <BasePanel p={player} act={act} />}
+            {tab === 'inventario' && <InventoryPanel p={player} act={act} onState={apply} onGoMarket={() => setTab('mercado')} />}
             {tab === 'bonde' && <CrewPanel p={player} onState={apply} />}
             {tab === 'cidade' && <CityPanel p={player} onState={apply} onProfile={setProfileCode} />}
             {tab === 'chat' && <Chat />}

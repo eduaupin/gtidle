@@ -138,7 +138,7 @@ describe('corrida, convite, presente e leilão', () => {
     const s = mk();
     const seller = player(s, 'vend'), x = player(s, 'x'), y = player(s, 'y');
     const rid = RARE_ITEMS[0].id;
-    seller.inventory.rares.push({ uid: `${rid}#3`, itemId: rid, serial: 3 });
+    seller.inventory.rares = [{ uid: `${rid}#3`, itemId: rid, serial: 3 }]; y.inventory.rares = [];
     x.diamondsPaid = 500; y.market.balance = 300; y.diamondsPaid = 300;
     const a = social.createAuction(s, seller, `${rid}#3`, 100, T, true);
     expect(seller.inventory.rares).toHaveLength(0);

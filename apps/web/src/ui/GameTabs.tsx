@@ -84,56 +84,7 @@ export function LookPanel({ p, act }: { p: PlayerState; act: Act }) {
         </div>
       </div>
 
-      <div className="card gang-stats">
-        <div className="row"><strong>Status da gangue</strong><span className="small muted">{equippedGear(p).length} de 4 peças com status</span></div>
-        {active.length === 0 && <p className="small muted">Nenhum item com status em uso. Eles caem nos assaltos: quanto mais estrelas e mais longo o golpe, melhor a raridade.</p>}
-        <ul className="stat-lines">
-          {active.map(st => (
-            <li key={st.id}>
-              <span>{st.name}</span>
-              <span className={summary.raw[st.id] > st.cap ? 'capped' : ''} title={summary.raw[st.id] > st.cap ? `Passou do teto: ${Math.round(summary.raw[st.id])}% nos itens, valem ${st.cap}%` : `Teto ${st.cap}%`}>
-                {Math.round(summary.stats[st.id])}%<small> / {st.cap}%</small>
-              </span>
-            </li>
-          ))}
-        </ul>
-        {summary.sets.map(set => {
-          const def = GEAR_SETS.find(x => x.id === set.id)!;
-          return <p key={set.id} className="small"><b>Conjunto {set.name}</b> ({set.pieces}/4): {set.pieces >= 2 ? '2 peças ativas' : 'falta 1 peça para o bônus'}{set.pieces >= 4 ? ' · 4 peças ativas' : ''} <span className="muted">— 2: {Object.entries(def.two).map(([k, v]) => statText(k as StatId, v ?? 0)).join(', ')}; 4: {Object.entries(def.four).map(([k, v]) => statText(k as StatId, v ?? 0)).join(', ')}</span></p>;
-        })}
-        {summary.perks.map(id => { const pk = PERKS.find(x => x.id === id)!; return <p key={id} className="small perk">★ {pk.name}: {pk.text}</p>; })}
-      </div>
-
-      <h3>Equipamento ({p.inventory.rares.length}/{GEAR.bagMax})</h3>
-      <p className="lead">
-        Roupas, armas, acessórios e carros agora caem nos assaltos, nos planos, nos golpes em equipe e na corrida. Cada um vem com raridade e status sorteados, então dois iguais nunca são idênticos. Item que você não usa vale diamantes no Mercado.
-        Com 4 estrelas a polícia queima a roupa e o carro em uso por {vip ? RULES.lookCooldownHoursVip : RULES.lookCooldownHours} h: tenha um reserva.
-      </p>
-      <div className="chips">
-        {([['tudo', 'Tudo'], ...GEAR_SLOTS.map(x => [x.id, x.name])] as [GearSlot | 'tudo', string][]).map(([id, name]) => (
-          <button key={id} className={filter === id ? 'chip active' : 'chip'} onClick={() => setFilter(id)}>{name}</button>
-        ))}
-      </div>
-      {bag.length === 0 && <p className="muted small">Nada aqui ainda. Deixe a gangue rodando: o primeiro item costuma cair na primeira hora.</p>}
-      <div className="gear-grid">
-        {bag.map(g => {
-          const on = onUids.has(g.uid);
-          const slot = slotOf(g.itemId) as GearSlot;
-          const burnt = burnedUntil(p, g.itemId);
-          const hot = burnt > now;
-          const cost = repairCost(g);
-          return (
-            <GearCard key={g.uid} g={g} on={on}>
-              <div className="buy-row">
-                {on
-                  ? <button className="small ghost" onClick={() => act({ type: 'unequipGear', slot })}>Tirar</button>
-                  : <button className="small" disabled={hot} onClick={() => act({ type: 'equipGear', uid: g.uid })}>{hot ? `Queimado até ${hhmm(burnt)}` : 'Usar'}</button>}
-                {cost > 0 && <button className="small ghost" disabled={p.cash < cost} onClick={() => act({ type: 'repairGear', uid: g.uid })} title="Zera o desgaste">Consertar {formatCash(cost)}</button>}
-              </div>
-            </GearCard>
-          );
-        })}
-      </div>
+      <p className="lead">Equipamento com status (armas, roupas, acessórios, carros e motos), munição, kits e vendas ficam na aba <b>Inventário</b>. Aqui é o visual sem status, o telhado do esconderijo e o tuning.</p>
 
       {visual('character', 'Roupas sem status', 'Visual que você já tem. Usar uma tira o status da roupa.')}
       {visual('jewelry', 'Acessórios sem status', 'Visual que você já tem.')}

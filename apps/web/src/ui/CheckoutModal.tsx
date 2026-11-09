@@ -33,10 +33,13 @@ export function useOrderStatus(orderId: string | null, onApproved?: () => void) 
 
 type Step = 'choose' | 'pix' | 'card-test';
 
-export default function CheckoutModal({ product, currency, pixLive, cardLive, onClose, onPaid }: {
+export default function CheckoutModal({ product, currency: chosenCurrency, pixLive, cardLive, onClose, onPaid, rmtListingId }: {
   product: RealMoneyProduct; currency: Currency; pixLive: boolean; cardLive: boolean;
   onClose: () => void; onPaid: () => void;
+  /** Compra de item de outro jogador (RMT): sempre em reais, sem presente */
+  rmtListingId?: string;
 }) {
+  const currency: Currency = rmtListingId ? 'BRL' : chosenCurrency;
   const [step, setStep] = useState<Step>('choose');
   const [email, setEmail] = useState(readEmail);
   const [pix, setPix] = useState<PixCharge | null>(null);
@@ -46,7 +49,7 @@ export default function CheckoutModal({ product, currency, pixLive, cardLive, on
   const [copied, setCopied] = useState(false);
   const [now, setNow] = useState(Date.now());
   // presente: o produto vai para outra conta (Clube e diamantes; pacotes de compra única não)
-  const giftable = !product.oneTime;
+  const giftable = !product.oneTime && !rmtListingId;
   const [gift, setGift] = useState(false);
   const [giftTo, setGiftTo] = useState('');
   const to = gift && giftable ? giftTo.trim() || undefined : undefined;
@@ -60,7 +63,7 @@ export default function CheckoutModal({ product, currency, pixLive, cardLive, on
     setError(''); setBusy(true);
     try {
       saveEmail(email);
-      const charge = await api.pix(product.id, email, to);
+      const charge = await api.pix(product.id, email, to, rmtListingId);
       setPix(charge); setOrderId(charge.orderId); setStep('pix');
     } catch (err) { setError((err as Error).message); }
     finally { setBusy(false); }
@@ -70,7 +73,7 @@ export default function CheckoutModal({ product, currency, pixLive, cardLive, on
     setError(''); setBusy(true);
     try {
       if (email) saveEmail(email);
-      const r = await api.card(product.id, currency, email || undefined, to);
+      const r = await api.card(product.id, currency, email || undefined, to, rmtListingId);
       if (r.checkoutUrl) { window.location.href = r.checkoutUrl; return; } // vai para a página segura do Stripe
       setOrderId(r.orderId); setStep('card-test');
     } catch (err) { setError((err as Error).message); setBusy(false); }

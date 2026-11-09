@@ -186,6 +186,15 @@ export interface PlayerState {
   rngSeed: number;
   /** Contas ligadas (Google/Firebase, Discord). Vazio = convidado: perde o jogo se limpar o navegador */
   accounts?: { provider: 'firebase' | 'discord'; method: string; name: string; at: number }[];
+  /** Vida, munição e kits médicos da gangue. `down` = recolhida no esconderijo, sem farmar */
+  vitals: {
+    hp: number; ammo: number; kits: number;
+    down: { reason: 'morto' | 'sem_cura'; at: number } | null;
+    /** Compra munição e kits sozinha no Mercador quando acaba (com grana do jogo) */
+    autoBuy: boolean;
+  };
+  /** Vendas por dinheiro real: valores retidos e liberados (em reais) */
+  rmt: { pending: { amount: number; releaseAt: number; listingId: string }[]; available: number; sold: number; bought: number };
   /** Equipamento com status em uso, por peça (uid do item da mochila) */
   gearOn: Partial<Record<GearSlot, string>>;
   /** Dia (Brasília) em que o efeito "Blindado" já foi usado */
@@ -209,6 +218,8 @@ export interface RareInstance {
   perk?: PerkId;
   /** Desgaste de 0 a 100: gasto rende metade até consertar */
   wear?: number;
+  /** Item preso à conta (inicial): não vai para mercado, leilão nem venda por dinheiro real */
+  bound?: boolean;
 }
 
 export interface Inventory {
@@ -350,6 +361,10 @@ export type GameEvent =
   | { type: 'hideout_done'; auto: boolean }
   | { type: 'drop'; kind: 'part' | 'plan' | 'rare' | 'gear'; id: string; qty: number; serial?: number; rarity?: Rarity }
   | { type: 'laundered'; amount: number }
+  | { type: 'robbery_failed'; jobId: string; reason: 'sem_bala' }
+  | { type: 'kit_used'; hp: number }
+  | { type: 'downed'; reason: 'morto' | 'sem_cura' }
+  | { type: 'supply_bought'; item: 'ammo' | 'kit'; qty: number; cost: number }
   | { type: 'confiscated'; amount: number; insured: boolean };
 
 export type Action =
@@ -368,6 +383,11 @@ export type Action =
   | { type: 'equipGear'; uid: string }
   | { type: 'unequipGear'; slot: GearSlot }
   | { type: 'repairGear'; uid: string }
+  | { type: 'buyConsumable'; item: 'ammo' | 'kit'; qty: number }
+  | { type: 'useKit' }
+  | { type: 'backToStreet' }
+  | { type: 'setAutoBuy'; on: boolean }
+  | { type: 'sellToMerchant'; uid: string }
   | { type: 'claimMission' }
   /** Só VIP: despista sem anúncio e ganha bônus. Quem não é VIP despista pela rota de anúncio. */
   | { type: 'resolveAlertVip' }

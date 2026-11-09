@@ -90,6 +90,13 @@ export interface AuctionInfo {
 }
 export interface AuctionView { open: AuctionInfo[]; recent: AuctionInfo[]; window: boolean; nextEnd: number }
 export type With<T> = StateResponse & { data: T };
+export interface RmtListingView { id: string; seller: string; price: number; item: RareInstance; status: string; expiresAt: number; reservedByMe: boolean; mine: boolean; soldAt: number | null }
+export interface RmtView {
+  enabled: boolean; linked: boolean; canSell: boolean;
+  open: RmtListingView[]; mine: RmtListingView[];
+  wallet: { pending: { amount: number; releaseAt: number; listingId: string }[]; available: number; sold: number; bought: number; payoutsEnabled: boolean };
+  rules: { fee: number; holdDays: number; minPrice: number; maxPrice: number; sellerMinLevel: number; listingDays: number };
+}
 
 async function publicGet<T>(path: string): Promise<T> {
   const res = await fetch(path);
@@ -115,9 +122,9 @@ export const api = {
   state: () => call<StateResponse>('/api/state'),
   act: (action: Action) => call<StateResponse>('/api/action', { action }),
   shop: () => call<{ pixLive: boolean; cardLive: boolean; products: RealMoneyProduct[] }>('/api/shop'),
-  pix: (productId: string, email: string, giftTo?: string) => call<PixCharge>('/api/shop/pix', { productId, email, ...(giftTo ? { giftTo } : {}) }),
-  card: (productId: string, currency: Currency, email?: string, giftTo?: string) =>
-    call<{ orderId: string; mode: 'dev' | 'live'; checkoutUrl: string | null; amount: number; currency: Currency }>('/api/shop/card', { productId, currency, email, ...(giftTo ? { giftTo } : {}) }),
+  pix: (productId: string, email: string, giftTo?: string, rmtListingId?: string) => call<PixCharge>('/api/shop/pix', { productId, email, ...(giftTo ? { giftTo } : {}), ...(rmtListingId ? { rmtListingId } : {}) }),
+  card: (productId: string, currency: Currency, email?: string, giftTo?: string, rmtListingId?: string) =>
+    call<{ orderId: string; mode: 'dev' | 'live'; checkoutUrl: string | null; amount: number; currency: Currency }>('/api/shop/card', { productId, currency, email, ...(giftTo ? { giftTo } : {}), ...(rmtListingId ? { rmtListingId } : {}) }),
   order: (orderId: string) => call<OrderStatus>(`/api/shop/order/${orderId}`),
   devApprove: (orderId: string) => call<{ ok: true }>(`/api/dev/approve/${orderId}`, {}),
   devAlert: () => call<StateResponse>('/api/dev/alert', {}),
@@ -135,6 +142,9 @@ export const api = {
   marketCancel: (id: string) => call<MarketResponse>('/api/market/cancel', { id }),
   marketBuy: (id: string) => call<MarketResponse>('/api/market/buy', { id }),
   adComplete: (token: string) => call<StateResponse>('/api/ads/complete', { token }),
+  rmt: () => call<With<RmtView>>('/api/rmt'),
+  rmtList: (uid: string, price: number) => call<With<RmtView>>('/api/rmt/list', { uid, price }),
+  rmtCancel: (id: string) => call<With<RmtView>>('/api/rmt/cancel', { id }),
   crew: () => call<With<CrewView>>('/api/crew'),
   crewCreate: (name: string, tag: string) => call<With<unknown>>('/api/crew/create', { name, tag }),
   crewJoin: (code: string) => call<With<unknown>>('/api/crew/join', { code }),

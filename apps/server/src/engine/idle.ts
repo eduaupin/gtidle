@@ -4,7 +4,7 @@ import {
   DECOR_ITEMS, DEFAULT_PLACED, DIAMOND_ITEMS, DISTRICTS, DROP_RULES, HEIST_PLANS, PARTS, RARE_ITEMS, emptyInventory, ownsItem, DRUGS, PROPERTIES, ROBBERIES, RULES, STARTER_DECOR, STARTER_ITEMS,
   arsenalMult, equipamentoHeatMult, heatCapFor, starsFor, INSURANCE, LAUNDER, NIGHT, isNight, isLookBurned, oficinaMult,
   cashMult, isJailed, isTurbo, isVip, labLines, lawyerCost, nextRandom, offlineCapMs, robberyModeMult, xpMult, xpToNext,
-  GEAR, brDay, equippedGear, gearSummary, numberedRarity, rollBase, rollRarity, rollStats,
+  GEAR, MELEE, SUPPLY, bulletPrice, isMelee, jobNeeds, kitPrice, brDay, equippedGear, gearSummary, numberedRarity, rollBase, rollRarity, rollStats,
   type DrugId, type GameEvent, type PlayerState, type RobberyJob, type RobberyMode,
 } from '@gti/shared';
 
@@ -31,6 +31,9 @@ export function setTerritoryBonus(fn: (p: PlayerState, district: string, t: numb
 let afterAdvance: ((p: PlayerState, events: GameEvent[], now: number) => void) | null = null;
 export function setAfterAdvance(fn: ((p: PlayerState, events: GameEvent[], now: number) => void) | null) { afterAdvance = fn; }
 
+/** Arma inicial: presa à conta, não vende por dinheiro real nem no mercado */
+export const STARTER_WEAPON = { uid: 'inicial-revolver', itemId: 'arma_revolver', serial: 0, rarity: 'comum' as const, stats: { aim: 3 }, wear: 0, bound: true };
+
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 export const makeCode = (n = 6) => Array.from({ length: n }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join('');
 const drugById = new Map(DRUGS.map(d => [d.id, d]));
@@ -49,7 +52,7 @@ export function newPlayer(id: string, nick: string, now: number): PlayerState {
     dealing: { points: 1, drugId: null, sellProgress: 0 },
     properties: {},
     cosmetics: [...STARTER_ITEMS],
-    equipped: { character: 'skin_padrao', vehicle: 'carro_padrao', hideout: 'base_padrao', jewelry: null, weapon: null },
+    equipped: { character: 'skin_padrao', vehicle: 'carro_padrao', hideout: 'base_padrao', jewelry: null, weapon: STARTER_WEAPON.itemId },
     stats: { robberiesDone: 0, unitsSold: 0, timesJailed: 0, cashEarned: 0, batchesDone: 0, lawyerUses: 0, jobCounts: {} },
     missionIndex: 0,
     seenIntro: false,
@@ -62,7 +65,7 @@ export function newPlayer(id: string, nick: string, now: number): PlayerState {
     upgrades: { arsenal: 0, oficina: 0, equipamento: 0 },
     decor: { owned: [...STARTER_DECOR], placed: { ...DEFAULT_PLACED } },
     ads: { day: '', count: 0 },
-    inventory: emptyInventory(),
+    inventory: { ...emptyInventory(), rares: [{ ...STARTER_WEAPON }] },
     market: { balance: 0, adSlotUntil: null, sold: 0, bought: 0 },
     dirtyCash: 0,
     insurance: null,
@@ -71,7 +74,9 @@ export function newPlayer(id: string, nick: string, now: number): PlayerState {
     inbox: [],
     referral: { code: makeCode(), by: null, rewarded: 0, paidOut: false },
     race: { day: '', runs: 0 },
-    gearOn: {},
+    gearOn: { weapon: STARTER_WEAPON.uid },
+    vitals: { hp: SUPPLY.maxHp, ammo: 150, kits: 3, down: null, autoBuy: false },
+    rmt: { pending: [], available: 0, sold: 0, bought: 0 },
     rngSeed: Math.floor(Math.random() * 2 ** 31),
   };
 }
@@ -109,6 +114,13 @@ export function migrate(p: PlayerState): PlayerState {
   p.referral ??= { code: makeCode(), by: null, rewarded: 0, paidOut: false };
   p.race ??= { day: '', runs: 0 };
   p.gearOn ??= {};
+  p.rmt ??= { pending: [], available: 0, sold: 0, bought: 0 };
+  if (!p.vitals) {
+    // jogador de antes da vida/munição: ganha o kit inicial e um revólver se não tiver arma com status
+    p.vitals = { hp: SUPPLY.maxHp, ammo: 150, kits: 3, down: null, autoBuy: false };
+    if (!p.inventory.rares.some(r => r.uid === STARTER_WEAPON.uid)) p.inventory.rares.push({ ...STARTER_WEAPON });
+    if (!p.equipped.weapon) { p.equipped.weapon = STARTER_WEAPON.itemId; p.gearOn.weapon = STARTER_WEAPON.uid; }
+  }
   // itens antigos (antes dos status) ganham raridade e status uma vez
   for (const r of p.inventory.rares) {
     if (r.rarity) continue;
@@ -436,6 +448,51 @@ export function advance(p: PlayerState, now: number): GameEvent[] {
   return events;
 }
 
+/** Compra automática no Mercador (se ligada): repõe munição e kits com grana do jogo */
+function autoRestock(p: PlayerState, events: GameEvent[], needAmmo = 20) {
+  const v = p.vitals;
+  if (!v.autoBuy) return;
+  if (v.ammo < Math.max(20, needAmmo)) buySupplyRaw(p, 'ammo', Math.max(250, Math.ceil(needAmmo * 3)), events, true);
+  if (v.kits < 1) buySupplyRaw(p, 'kit', 5, events, true);
+}
+/** Compra munição ou kits (só com grana). `soft` = não reclama se faltar grana. */
+export function buySupplyRaw(p: PlayerState, item: 'ammo' | 'kit', qty: number, events: GameEvent[], soft = false) {
+  const v = p.vitals;
+  const room = item === 'ammo' ? SUPPLY.maxAmmo - Math.floor(v.ammo) : SUPPLY.maxKits - v.kits;
+  let n = Math.max(0, Math.min(Math.floor(qty), room));
+  const unit = item === 'ammo' ? bulletPrice(p.level) : kitPrice(p.level);
+  if (soft) n = Math.min(n, Math.floor(p.cash / unit));
+  if (n <= 0) return 0;
+  const cost = n * unit;
+  if (p.cash < cost) return 0;
+  p.cash -= cost;
+  if (item === 'ammo') v.ammo += n; else v.kits += n;
+  events.push({ type: 'supply_bought', item, qty: n, cost });
+  return n;
+}
+
+/** Vida: usa kit sozinha; sem kit e machucada recua; zerou, cai. Recolhida, para de farmar. */
+function applyDamage(p: PlayerState, dmg: number, t: number, events: GameEvent[]) {
+  const v = p.vitals;
+  v.hp = Math.max(0, v.hp - dmg);
+  if (v.hp <= 0) {
+    v.down = { reason: 'morto', at: t };
+    events.push({ type: 'downed', reason: 'morto' });
+    return;
+  }
+  while (v.hp < SUPPLY.autoHealBelow && v.kits > 0) {
+    v.kits -= 1;
+    v.hp = Math.min(SUPPLY.maxHp, v.hp + SUPPLY.kitHeal);
+    events.push({ type: 'kit_used', hp: Math.round(v.hp) });
+  }
+  if (v.hp < SUPPLY.retreatBelow && v.kits <= 0) {
+    autoRestock(p, events);
+    if (v.kits > 0) return applyDamage(p, 0, t, events);
+    v.down = { reason: 'sem_cura', at: t };
+    events.push({ type: 'downed', reason: 'sem_cura' });
+  }
+}
+
 function step(p: PlayerState, t: number, dt: number, events: GameEvent[]) {
   const wasJailed = p.jailedUntil !== null;
   if (wasJailed && !isJailed(p, t)) {
@@ -467,6 +524,9 @@ function step(p: PlayerState, t: number, dt: number, events: GameEvent[]) {
   // Procurado esfria com o tempo.
   p.heat = Math.max(0, p.heat - RULES.heatDecayPerSec * dt * (1 + gs.escape / 100));
 
+  // Recolhida no esconderijo: a vida volta aos poucos
+  if (p.vitals.down) p.vitals.hp = Math.min(SUPPLY.maxHp, p.vitals.hp + SUPPLY.regenPerSec * dt);
+
   if (jailed) return;
 
   tickHideout(p, t, dt, events);
@@ -475,18 +535,40 @@ function step(p: PlayerState, t: number, dt: number, events: GameEvent[]) {
   const lookBurned = isLookBurned(p, t);
 
   // 2) Assaltos em loop: "loot por tempo".
+  const weapon = p.equipped.weapon ? DIAMOND_ITEMS.find(i => i.id === p.equipped.weapon) : undefined;
+  const melee = isMelee(weapon?.weapon?.kind);
+  const veh = gear.vehicle;
   for (const slot of p.robberies) {
-    if (!slot.jobId || lookBurned) continue; // visual queimado: a gangue não sai até trocar de roupa e carro
+    if (!slot.jobId || lookBurned || p.vitals.down) continue; // visual queimado ou gangue recolhida: ninguém sai
     const job = robberyById.get(slot.jobId);
     if (!job) { slot.jobId = null; continue; }
-    slot.progressSec += dt * speed * oficinaMult(p) * (1 + gs.speed / 100);
-    while (slot.progressSec >= job.durationSec && !isJailed(p, t)) {
+    slot.progressSec += dt * speed * oficinaMult(p) * (1 + gs.speed / 100) * (1 + veh.speed / 100);
+    while (slot.progressSec >= job.durationSec && !isJailed(p, t) && !p.vitals.down) {
       slot.progressSec -= job.durationSec;
       const mm = robberyModeMult(slot, t); // golpe fraco, normal ou com bônus
       const night = isNight(t);
+      // munição: arma de fogo gasta bala; arma branca só serve até 3★; sem bala, 1% de chance
+      const need = jobNeeds(job, gs.aim, gs.vest);
+      let armed = !need.needsGun;
+      let meleeMult = 1;
+      if (need.needsGun && weapon) {
+        if (melee) { armed = job.maxStars <= MELEE.maxStars; meleeMult = MELEE.cashMult; }
+        else {
+          if (p.vitals.ammo < need.ammo) autoRestock(p, events, need.ammo);
+          if (p.vitals.ammo >= need.ammo) { p.vitals.ammo -= need.ammo; armed = true; }
+        }
+      }
+      const success = armed || rnd(p) < SUPPLY.unarmedSuccess;
+      applyDamage(p, need.damage, t, events);
+      if (!success) {
+        events.push({ type: 'robbery_failed', jobId: job.id, reason: 'sem_bala' });
+        addHeat(p, job.heat * 0.5, t, events, job.maxStars);
+        if (slot.once) { slot.jobId = null; slot.once = undefined; slot.progressSec = 0; break; }
+        continue;
+      }
       const gearCash = 1 + (gs.cash + (job.maxStars >= 4 ? gs.intimidate : 0)) / 100;
       const nightPerk = night && gear.perks.includes('dono_da_noite') ? 1.25 : 1;
-      const cash = Math.round(roll(p, job.cash) * cm * mm * arsenalMult(p) * (night ? NIGHT.cashMult : 1) * (1 + territoryBonus(p, job.district, t)) * gearCash * nightPerk);
+      const cash = Math.round(roll(p, job.cash) * cm * mm * arsenalMult(p) * (night ? NIGHT.cashMult : 1) * (1 + territoryBonus(p, job.district, t)) * gearCash * nightPerk * (1 + veh.cash / 100) * meleeMult);
       const xp = Math.max(1, Math.round(job.xp * xm * mm * (1 + gs.xp / 100)));
       // golpe grande rende grana suja: precisa passar pelos negócios antes de gastar
       const dirty = job.maxStars >= LAUNDER.dirtyFromStars;

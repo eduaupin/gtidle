@@ -108,7 +108,7 @@ describe('equipamento com status', () => {
     p.inventory.rares.push({ uid: 'rare_cinza#7', itemId: 'rare_cinza', serial: 7 });
     p.gearOn = { weapon: 'nao-existe' };
     migrate(p);
-    expect(p.inventory.rares[0].rarity).toBe('epico');
+    expect(p.inventory.rares.find(r => r.uid === 'rare_cinza#7')!.rarity).toBe('epico');
     expect(p.gearOn.weapon).toBeUndefined();
   });
 });

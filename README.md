@@ -304,6 +304,30 @@ a mesma taxa do mercado.
 **Para testar em desenvolvimento:** botão "+$50.000 sujo" para a lavanderia; o leilão abre qualquer dia;
 use janelas anônimas com nicks diferentes para bonde, equipe, presentes e lances.
 
+## Vida, munição, veículos e venda de itens (Inventário)
+
+Regras em `packages/shared/src/content/supply.ts`; venda por dinheiro real em `apps/server/src/rmt.ts`.
+
+- **Munição:** golpe de 2★ ou mais precisa de arma e gasta bala (30 a 80 por hora de assalto, conforme as
+  estrelas). Sem bala ou sem arma a gangue continua tentando, mas só **1%** dá certo. Arma branca (taco, faca)
+  não gasta bala, rende 20% menos e não serve para 4★ ou mais.
+- **Vida e kits médicos:** todo golpe machuca (mais estrelas, mais dano). Abaixo de 40 de vida a gangue usa um kit
+  sozinha. Sem kit e com a vida baixa ela recua; vida zerada, cai. Nos dois casos volta para o esconderijo e
+  **não farma** até o jogador mandar de volta (precisa de 50 de vida; volta sozinha em ~1 h ou com kit).
+- **Mercador:** vende munição e kits **só com grana do jogo** (preço acompanha a renda do nível: ~6% em bala e
+  ~4% em kits). Opção de repor sozinho. Também compra qualquer item na hora.
+- **Carros e motos:** categoria pelo tipo (Moto, Popular, Sedã, Esportivo, Picape, Utilitário) e classe pela
+  raridade (C, B, A, S). Quanto melhor, mais rápido e mais grana por assalto.
+- **Novos status:** Colete (menos dano) e Pontaria (menos bala).
+- **Jogador novo:** Revólver Antigo preso à conta, 150 balas e 3 kits.
+- **Venda dos itens:** no Inventário, cada item vende para o Mercador (na hora), no Mercado (diamantes) ou por
+  **dinheiro real**. RMT: preço de R$ 2 a R$ 2.000, 10% de taxa, conta Google/Discord ligada nos dois lados,
+  vendedor a partir do nível 10. O item fica em custódia, o comprador paga por Pix ou cartão e recebe na hora;
+  o valor do vendedor fica retido 7 dias. **Saque para o banco desligado** e o RMT em produção só liga com
+  `RMT_ENABLED=on`, depois de escolher o intermediário de pagamento e passar por um advogado.
+- Munição e kits nunca se compram com dinheiro real: pagar para tentar um drop que vale dinheiro real seria caixa
+  de recompensa paga.
+
 ## Login e publicação
 
 Login com **Google (Firebase)** e **Discord**, ligados ao mesmo jogador; o convidado que liga uma conta leva o

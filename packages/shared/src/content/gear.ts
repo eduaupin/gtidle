@@ -8,6 +8,7 @@
 //  - todo status tem teto somando os itens, para quem compra no mercado não quebrar o jogo de quem joga grátis.
 import type { DiamondItem, PlayerState, RareInstance, Rarity } from '../types';
 import { DIAMOND_ITEMS } from './shop';
+import { VEHICLE_CLASSES, vehicleCategory } from './supply';
 
 export type GearSlot = 'character' | 'vehicle' | 'jewelry' | 'weapon';
 export const GEAR_SLOTS: { id: GearSlot; name: string }[] = [
@@ -17,7 +18,7 @@ export const GEAR_SLOTS: { id: GearSlot; name: string }[] = [
 export type StatId =
   | 'cash' | 'xp' | 'speed' | 'stealth' | 'intimidate' | 'luck' | 'rareFind' | 'escape'
   | 'lawyer' | 'jail' | 'pocket' | 'launder' | 'boss' | 'chem' | 'dealer' | 'reaction'
-  | 'accel' | 'topSpeed' | 'armor' | 'turf' | 'hideout'
+  | 'accel' | 'topSpeed' | 'armor' | 'turf' | 'hideout' | 'vest' | 'aim'
   | 'role_motorista' | 'role_hacker' | 'role_arrombador' | 'role_vigia';
 
 export interface StatDef {
@@ -57,6 +58,8 @@ export const STATS: StatDef[] = [
   { id: 'topSpeed', name: 'Velocidade final', text: 'Corrida: +{v}% de velocidade máxima', slots: ['vehicle'], base: [2, 4], cap: 25 },
   { id: 'armor', name: 'Lataria', text: 'Corrida: perde {v}% menos velocidade ao bater', slots: ['vehicle'], base: [4, 8], cap: 60 },
   { id: 'turf', name: 'Dono da área', text: '+{v}% de pontos de território', slots: ['weapon'], base: [3, 7], cap: 60 },
+  { id: 'vest', name: 'Colete', text: '-{v}% de dano nos golpes', slots: ['character'], base: [3, 6], cap: 50 },
+  { id: 'aim', name: 'Pontaria', text: '-{v}% de munição gasta', slots: ['weapon'], base: [3, 6], cap: 50 },
   { id: 'hideout', name: 'Esconderijo', text: '-{v}% de espera no esconderijo', slots: ['character'], base: [4, 8], cap: 50 },
   { id: 'role_motorista', name: 'Especialista: motorista', text: '+{v}% da parte no golpe em equipe como motorista', slots: ALL, base: [4, 8], cap: 60 },
   { id: 'role_hacker', name: 'Especialista: hacker', text: '+{v}% da parte no golpe em equipe como hacker', slots: ALL, base: [4, 8], cap: 60 },
@@ -152,7 +155,8 @@ export function rollBase(rarity: Rarity, rand: Rand): DiamondItem {
 export function rollStats(base: DiamondItem, rarity: Rarity, rand: Rand) {
   const slot = base.slot as GearSlot;
   const rule = RARITY_RULES[rarity];
-  const pool = STATS.filter(s => s.slots.includes(slot) && (!s.minRarity || rarityRank(rarity) >= rarityRank(s.minRarity)));
+  const melee = base.weapon?.kind === 'taco' || base.weapon?.kind === 'faca';
+  const pool = STATS.filter(s => s.slots.includes(slot) && (!s.minRarity || rarityRank(rarity) >= rarityRank(s.minRarity)) && !(melee && s.id === 'aim'));
   const stats: Partial<Record<StatId, number>> = {};
   const n = Math.min(rule.stats, pool.length);
   let left = [...pool];
@@ -202,6 +206,8 @@ export interface GearSummary {
   raw: StatTotals;
   sets: { id: SetId; name: string; pieces: number }[];
   perks: PerkId[];
+  /** Categoria e classe do veículo em uso (bônus próprio, fora do teto) */
+  vehicle: { category: string; className: string | null; speed: number; cash: number };
 }
 
 export function gearSummary(p: PlayerState): GearSummary {
@@ -223,7 +229,13 @@ export function gearSummary(p: PlayerState): GearSummary {
     if (pieces >= 2) for (const [k, v] of Object.entries(def.two)) stats[k as StatId] += v ?? 0;
     if (pieces >= 4) for (const [k, v] of Object.entries(def.four)) stats[k as StatId] += v ?? 0;
   }
-  return { stats, raw, sets: setList, perks };
+  // veículo: categoria (moto, esportivo...) + classe pela raridade (C, B, A, S)
+  const vItem = DIAMOND_ITEMS.find(i => i.id === p.equipped.vehicle);
+  const cat = vehicleCategory(vItem?.vehicleType);
+  const vGear = equippedGear(p).find(g => DIAMOND_ITEMS.find(i => i.id === g.itemId)?.slot === 'vehicle');
+  const cls = vGear ? VEHICLE_CLASSES[vGear.rarity ?? 'comum'] : null;
+  const vehicle = { category: cat.name, className: cls?.name ?? null, speed: cat.speed + (cls?.speed ?? 0), cash: cat.cash + (cls?.cash ?? 0) };
+  return { stats, raw, sets: setList, perks, vehicle };
 }
 
 /** Atalho: fração do status (0,15 = 15%) */

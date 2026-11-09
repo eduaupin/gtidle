@@ -2,9 +2,10 @@
 import {
   DIAMOND_ITEMS, DISTRICTS, DRUGS, PROPERTIES, REAL_MONEY_PRODUCTS, ROBBERIES, RULES,
   costAt, dealingPointCost, isJailed, isVip, labUpgradeCost, lawyerCost, totalDiamonds,
-  DECOR_ITEMS, HEIST_PLANS, isGearSlot, repairCost, INSURANCE, LAUNDER, TUNING, insuranceCost, PARTS, PART_FOR, STAR_HEAT, UPGRADE_MAX, isLookBurned, ownsItem, partsForTier, burnedUntil, currentMission, missionDone, upgradeCost, upgradeMinLevel,
+  DECOR_ITEMS, HEIST_PLANS, isGearSlot, repairCost, SUPPLY, merchantValue, INSURANCE, LAUNDER, TUNING, insuranceCost, PARTS, PART_FOR, STAR_HEAT, UPGRADE_MAX, isLookBurned, ownsItem, partsForTier, burnedUntil, currentMission, missionDone, upgradeCost, upgradeMinLevel,
   type Action, type GameEvent, type Grant, type PlayerState,
 } from '@gti/shared';
+import { buySupplyRaw } from './idle';
 import { enterHideout, gainXp, leaveHideout, normalizeSlots, resolveAlert } from './idle';
 
 export class GameError extends Error {}
@@ -213,6 +214,42 @@ export function applyAction(p: PlayerState, a: Action, now: number): GameEvent[]
       delete p.gearOn[a.slot];
       if (a.slot === 'jewelry' || a.slot === 'weapon') p.equipped[a.slot] = null;
       else p.equipped[a.slot] = a.slot === 'character' ? 'skin_padrao' : 'carro_padrao';
+      return;
+    }
+    case 'buyConsumable': {
+      if (a.item !== 'ammo' && a.item !== 'kit') fail('Item inválido');
+      const ev: GameEvent[] = [];
+      const n = buySupplyRaw(p, a.item, Number(a.qty) || 0, ev);
+      if (!n) fail(p.cash <= 0 ? 'Sem grana' : 'Sem grana ou sem espaço');
+      return ev;
+    }
+    case 'useKit': {
+      const v = p.vitals;
+      if (v.kits <= 0) fail('Sem kit médico');
+      if (v.hp >= SUPPLY.maxHp) fail('Vida cheia');
+      v.kits -= 1;
+      v.hp = Math.min(SUPPLY.maxHp, v.hp + SUPPLY.kitHeal);
+      return [{ type: 'kit_used', hp: Math.round(v.hp) }];
+    }
+    case 'backToStreet': {
+      const v = p.vitals;
+      if (!v.down) fail('A gangue já está na rua');
+      if (v.hp < SUPPLY.returnHp) fail(`Precisa de ${SUPPLY.returnHp} de vida para voltar (use um kit ou espere)`);
+      v.down = null;
+      return;
+    }
+    case 'setAutoBuy': {
+      p.vitals.autoBuy = !!a.on;
+      return;
+    }
+    case 'sellToMerchant': {
+      const idx = p.inventory.rares.findIndex(r => r.uid === a.uid);
+      if (idx < 0) fail('Item não está na mochila');
+      const g = p.inventory.rares[idx];
+      if (Object.values(p.gearOn).includes(g.uid)) fail('Tire o item antes de vender');
+      const value = merchantValue(g, p.level);
+      p.inventory.rares.splice(idx, 1);
+      p.cash += value;
       return;
     }
     case 'repairGear': {
