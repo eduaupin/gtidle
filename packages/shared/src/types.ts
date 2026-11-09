@@ -184,6 +184,8 @@ export interface PlayerState {
   /** Mercado: saldo de vendas (sacável no futuro) e vaga extra ganha com anúncio */
   market: { balance: number; adSlotUntil: number | null; sold: number; bought: number };
   rngSeed: number;
+  /** Contas ligadas (Google/Firebase, Discord). Vazio = convidado: perde o jogo se limpar o navegador */
+  accounts?: { provider: 'firebase' | 'discord'; method: string; name: string; at: number }[];
   /** Equipamento com status em uso, por peça (uid do item da mochila) */
   gearOn: Partial<Record<GearSlot, string>>;
   /** Dia (Brasília) em que o efeito "Blindado" já foi usado */

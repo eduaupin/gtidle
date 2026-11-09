@@ -304,6 +304,11 @@ a mesma taxa do mercado.
 **Para testar em desenvolvimento:** botão "+$50.000 sujo" para a lavanderia; o leilão abre qualquer dia;
 use janelas anônimas com nicks diferentes para bonde, equipe, presentes e lances.
 
+## Login e publicação
+
+Login com **Google (Firebase)** e **Discord**, ligados ao mesmo jogador; o convidado que liga uma conta leva o
+progresso junto. Passo a passo de chaves, domínio e servidor em **[DEPLOY.md](DEPLOY.md)**.
+
 ## Equipamento com status (drops)
 
 Regras em `packages/shared/src/content/gear.ts`. Roupas, armas, acessórios e carros **não se compram mais**:

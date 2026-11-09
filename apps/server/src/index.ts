@@ -10,21 +10,40 @@ import { buyListing, cancelListing, listItem, marketView, sweepExpired, type Lis
 import { applyAction, applyGrant, canBuyProduct, GameError } from './engine/actions';
 import { FileStore } from './store/store';
 import { issueToken, verifyToken } from './auth';
+import * as accounts from './accounts';
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import fastifyStatic from '@fastify/static';
 import { createPix, fetchPayment, paymentsLive, verifyWebhookSignature } from './payments';
 import { sendPush, vapidPublicKey } from './push';
 import { createCardCheckout, fetchCheckout, parseStripeWebhook, stripeLive, toCents } from './stripe';
 
 const PORT = Number(process.env.PORT ?? 3001);
 const DEV = process.env.NODE_ENV !== 'production';
+// Em produção, sem segredo próprio qualquer um poderia forjar a sessão de outro jogador.
+if (!DEV && (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.length < 32)) {
+  throw new Error('Defina SESSION_SECRET (32+ caracteres aleatórios) antes de subir em produção.');
+}
 const store = new FileStore(process.env.DATA_FILE ?? './data/dev-db.json');
 // número de série dos raros é global (um #0042 só existe uma vez no jogo inteiro)
 setSerialAllocator((itemId, supply) => store.nextSerial(itemId, supply));
+
 // cidade viva: bônus de território e o que acontece depois de cada avanço (pontos, jornal, convites)
 setTerritoryBonus(social.territoryBonusFor(store));
 setAfterAdvance(social.onAdvance(store));
 
 const app = Fastify({ logger: { level: DEV ? 'info' : 'warn' } });
 await app.register(cors, { origin: process.env.CORS_ORIGIN?.split(',') ?? true });
+
+// Produção: o próprio servidor entrega o site (apps/web/dist), tudo num endereço só.
+const WEB_DIST = fileURLToPath(new URL('../../web/dist', import.meta.url));
+if (!DEV && existsSync(WEB_DIST)) {
+  await app.register(fastifyStatic, { root: WEB_DIST, wildcard: false, maxAge: '1h' });
+  app.setNotFoundHandler((req, reply) => {
+    if (req.url.startsWith('/api/') || req.url.startsWith('/socket.io')) return reply.code(404).send({ error: 'Não encontrado' });
+    return reply.sendFile('index.html');
+  });
+}
 
 // Guarda o corpo cru das requisições JSON: o webhook do Stripe precisa dele para validar a assinatura.
 app.removeContentTypeParser('application/json');
@@ -59,6 +78,7 @@ function rateLimit(id: string, max = 20, windowMs = 5000) {
 
 app.setErrorHandler((err: Error & { statusCode?: number }, _req, reply) => {
   if (err instanceof social.SocialError) return reply.code(400).send({ error: err.message });
+  if (err instanceof accounts.AuthError) return reply.code(401).send({ error: err.message });
   if (err instanceof GameError) return reply.code(400).send({ error: err.message });
   const code = err.statusCode ?? 500;
   if (code >= 500) app.log.error(err);
@@ -73,6 +93,49 @@ app.post('/api/guest', async (req) => {
   social.applyReferral(store, p, ref, Date.now());
   store.savePlayer(p);
   return { token, player: p };
+});
+
+// Login com Google (Firebase) e Discord. Se vier com o token de convidado, a conta é ligada a ele
+// e o progresso vai junto.
+const currentId = (req: { headers: Record<string, unknown> }) => {
+  const id = verifyToken(req.headers.authorization as string | undefined);
+  return id && store.getPlayer(id) ? id : null;
+};
+const createFor = (nick?: string, ref?: string) => (name: string) => {
+  const { id } = issueToken();
+  const p = newPlayer(id, sanitizeNick(nick || name), Date.now());
+  social.applyReferral(store, p, ref, Date.now());
+  return p;
+};
+app.get('/api/auth/config', async () => ({
+  firebase: accounts.firebaseEnabled() || DEV, discord: accounts.discordEnabled() || DEV, dev: DEV && !accounts.firebaseEnabled(),
+}));
+app.post('/api/auth/firebase', async (req) => {
+  const { idToken, nick, ref } = (req.body ?? {}) as { idToken?: string; nick?: string; ref?: string };
+  const ident = await accounts.verifyFirebase(String(idToken ?? ''));
+  const { player, result } = accounts.loginWithIdentity(store, ident, { currentId: currentId(req), create: createFor(nick, ref) });
+  migrate(player);
+  return { token: accounts.sessionFor(player.id), player, result };
+});
+app.post('/api/auth/discord/start', async (req) => {
+  const { nick, ref } = (req.body ?? {}) as { nick?: string; ref?: string };
+  const link = currentId(req) ?? undefined;
+  return { url: accounts.discordAuthUrl(accounts.signState({ link, ref, nick })) };
+});
+app.get('/api/auth/discord/callback', async (req, reply) => {
+  const q = req.query as { code?: string; state?: string; error?: string };
+  const back = process.env.PUBLIC_URL ?? 'http://localhost:5173';
+  try {
+    if (q.error || !q.code) throw new accounts.AuthError('Login do Discord cancelado.');
+    const st = accounts.readState(String(q.state));
+    const ident = await accounts.discordIdentity(q.code);
+    const link = st.link && store.getPlayer(st.link) ? st.link : null;
+    const { player, result } = accounts.loginWithIdentity(store, ident, { currentId: link, create: createFor(st.nick, st.ref) });
+    // o token vai no "#" (não chega a servidor nenhum nem fica em log)
+    return reply.redirect(`${back}/#login=${encodeURIComponent(accounts.sessionFor(player.id))}&result=${result}`);
+  } catch (e) {
+    return reply.redirect(`${back}/#loginError=${encodeURIComponent((e as Error).message)}`);
+  }
 });
 
 // ---------- estado e ações ----------

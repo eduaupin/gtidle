@@ -16,9 +16,9 @@ function countdown(to: number, now: number) {
   return d > 0 ? `${d}d ${h}h ${m}min` : `${h}h ${m}min ${s % 60}s`;
 }
 
-export default function Hud({ player: p, onLawyer, onShop, onHelp, onShare, onMap, onPhoto, onProfile, onDirty }: {
+export default function Hud({ player: p, onLawyer, onShop, onHelp, onShare, onMap, onPhoto, onProfile, onDirty, onAccount }: {
   player: PlayerState; onLawyer: () => void; onShop: () => void; onHelp: () => void; onShare: () => void; onMap: () => void;
-  onPhoto: () => void; onProfile: () => void; onDirty: () => void;
+  onPhoto: () => void; onProfile: () => void; onDirty: () => void; onAccount: () => void;
 }) {
   const now = useNow();
   const stars = starsFor(p.heat);
@@ -82,6 +82,7 @@ export default function Hud({ player: p, onLawyer, onShop, onHelp, onShare, onMa
       <button className="help" onClick={onShare}>Compartilhar</button>
       <button className="help" onClick={onPhoto}>Foto</button>
       <button className="help" onClick={onProfile}>Ficha</button>
+      <button className={`help ${(p.accounts ?? []).length ? '' : 'alert-dot'}`} onClick={onAccount} title={(p.accounts ?? []).length ? 'Sua conta' : 'Convidado: ligue Google ou Discord para não perder o jogo'}>Conta</button>
       <button className="help" onClick={onHelp}>Como jogar</button>
     </header>
   );

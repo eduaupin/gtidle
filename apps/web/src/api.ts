@@ -99,6 +99,14 @@ async function publicGet<T>(path: string): Promise<T> {
 }
 
 export const api = {
+  authConfig: () => call<{ firebase: boolean; discord: boolean; dev: boolean }>('/api/auth/config'),
+  async loginFirebase(idToken: string, nick?: string, ref?: string | null) {
+    const r = await call<{ token: string; player: PlayerState; result: 'existing' | 'linked' | 'new' }>('/api/auth/firebase', { idToken, nick, ...(ref ? { ref } : {}) });
+    setToken(r.token);
+    return r;
+  },
+  discordStart: (nick?: string, ref?: string | null) => call<{ url: string }>('/api/auth/discord/start', { nick, ...(ref ? { ref } : {}) }),
+  useSession: (token: string) => setToken(token),
   async guest(nick: string, ref?: string | null) {
     const r = await call<{ token: string; player: PlayerState }>('/api/guest', { nick, ...(ref ? { ref } : {}) });
     setToken(r.token);

@@ -445,3 +445,16 @@ button.pay-pix { background: var(--pix); color: #04201d; }
 .gang-stats .capped { color: var(--sodium); }
 .gang-stats .perk { color: var(--sodium); }
 .sell-info .gear-stats { margin: 0.1rem 0; }
+
+/* ---------- login com Google e Discord ---------- */
+.login-buttons { display: grid; gap: 0.5rem; }
+.login-buttons button { display: inline-flex; align-items: center; justify-content: center; gap: 0.55rem; font-weight: 700; }
+.btn-google { background: #fff; color: #1f1f1f; }
+.btn-discord { background: #5865f2; color: #fff; }
+.login .or { text-align: center; margin: 0.2rem 0 -0.4rem; }
+.warn-box { background: #3b2f1b; color: #f3d9a4; border-radius: var(--radius-s); padding: 0.6rem 0.7rem; font-size: 0.9rem; }
+.modal.account { max-width: 26rem; display: grid; gap: 0.7rem; }
+.accounts { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.25rem; }
+.help.alert-dot { position: relative; }
+.help.alert-dot::after { content: ''; position: absolute; top: 2px; right: 2px; width: 8px; height: 8px; border-radius: 50%; background: var(--siren-red); }
+button.danger { background: var(--siren-red); color: #fff; }

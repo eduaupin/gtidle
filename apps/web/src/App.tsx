@@ -24,6 +24,8 @@ import Icon from './ui/Icon';
 import CrewPanel from './ui/Crew';
 import CityPanel from './ui/CityTab';
 import { PhotoModal, ProfileModal } from './ui/Social';
+import { AccountModal, LoginButtons, RESULT_TEXT } from './ui/Account';
+import { consumeLoginHash } from './auth';
 
 type Tab = 'assaltos' | 'lab' | 'imoveis' | 'gangue' | 'visual' | 'base' | 'bonde' | 'cidade' | 'mercado' | 'loja' | 'chat';
 const TABS: [Tab, string, string?][] = [
@@ -128,7 +130,11 @@ export default function App() {
   const [selectedJob, setSelectedJob] = useState<string | null>(null);
   const [log, setLog] = useState<LogLine[]>([]);
   const [toast, setToast] = useState<string | null>(null);
+  // volta do Discord: o login vem no endereço (#login=...)
+  const [loginBack] = useState(() => consumeLoginHash());
   const [needsLogin, setNeedsLogin] = useState(!getToken());
+  const [account, setAccount] = useState(false);
+  const [loginErr, setLoginErr] = useState(loginBack?.error ?? '');
   const [nick, setNick] = useState('');
   const [showIntro, setShowIntro] = useState(false);
   const [buying, setBuying] = useState<RealMoneyProduct | null>(null);
@@ -224,6 +230,14 @@ export default function App() {
     }
   }, [apply]);
 
+  // mensagem da volta do Discord
+  const shownBack = useRef(false);
+  useEffect(() => {
+    if (!player || shownBack.current || !loginBack?.result) return;
+    shownBack.current = true;
+    pushLog([{ kind: 'good', text: RESULT_TEXT[loginBack.result] ?? 'Pronto.' }]);
+  }, [player, loginBack, pushLog]);
+
   const closeIntro = () => { setShowIntro(false); if (player && !player.seenIntro) act({ type: 'dismissIntro' }); };
   const onPaid = useCallback(() => { refresh(); }, [refresh]);
 
@@ -233,6 +247,9 @@ export default function App() {
         <h1>{BRAND.name}<span>{BRAND.tagline}</span></h1>
         <p>Comece com $50 na Periferia, monte sua gangue e atravesse a cidade até as Mansões. Ela trabalha até quando você fecha o jogo.</p>
         {ref && <p className="invite-note">Você chegou por convite ({ref}): entra com bônus de grana e diamantes.</p>}
+        <LoginButtons nick={nick} refCode={ref} onDone={() => { try { localStorage.removeItem('gti_ref'); } catch { /* ok */ } setNeedsLogin(false); }} />
+        {loginErr && <p className="msg bad">{loginErr}</p>}
+        <p className="small muted or">ou jogue como convidado (dá para ligar a conta depois)</p>
         <form onSubmit={async e => { e.preventDefault(); await api.guest(nick, ref); try { localStorage.removeItem('gti_ref'); } catch { /* ok */ } setNeedsLogin(false); }}>
           <input autoFocus value={nick} maxLength={16} onChange={e => setNick(e.target.value)} placeholder="Seu apelido" aria-label="Seu apelido, de 3 a 16 letras" />
           <button disabled={nick.trim().length < 3}>Entrar</button>
@@ -251,7 +268,8 @@ export default function App() {
   return (
     <div className="app">
       <Hud player={player} onLawyer={() => act({ type: 'payLawyer' })} onShop={() => setTab('loja')} onHelp={() => setShowIntro(true)} onShare={() => setSharing(true)} onMap={() => setShowMap(true)}
-        onPhoto={() => setPhoto(true)} onProfile={() => setProfileCode(player.referral.code)} onDirty={() => setTab('imoveis')} />
+        onPhoto={() => setPhoto(true)} onProfile={() => setProfileCode(player.referral.code)} onDirty={() => setTab('imoveis')}
+        onAccount={() => setAccount(true)} />
       <div className="layout">
         <section className="map" aria-label="Mapa">
           <CityCanvas player={player} fetchedAt={fetchedAt}
@@ -315,6 +333,9 @@ export default function App() {
       {toast && <div className="toasts" role="alert"><div className="toast bad">{toast}</div></div>}
       {showIntro && <Intro onClose={closeIntro} />}
       {sharing && <ShareModal p={player} onClose={() => setSharing(false)} />}
+      {account && <AccountModal p={player} onClose={() => setAccount(false)}
+        onLinked={r => { setAccount(false); pushLog([{ kind: 'good', text: RESULT_TEXT[r] ?? 'Pronto.' }]); refresh(); }}
+        onLogout={() => { clearToken(); setAccount(false); setPlayer(null); setNeedsLogin(true); }} />}
       {photo && <PhotoModal p={player} onClose={() => setPhoto(false)} />}
       {profileCode && <ProfileModal code={profileCode} onClose={() => setProfileCode(null)} />}
       {showMap && <WorldMap p={player} onTravel={d => act({ type: 'travel', district: d })} onClose={() => setShowMap(false)} />}
