@@ -1,6 +1,6 @@
 // Imagens para compartilhar: manchete do Jornal da Costa Dourada, ficha criminal e o modo foto.
 // Tudo desenhado no canvas com a mesma arte do jogo e sempre com o código de convite no rodapé.
-import { BRAND, DIAMOND_ITEMS, DISTRICTS, TROPHIES, formatCash, type PlayerState } from '@gti/shared';
+import { BRAND, DIAMOND_ITEMS, RARITY_NAME, DISTRICTS, TROPHIES, formatCash, type PlayerState } from '@gti/shared';
 import type { NewsItem, Profile } from '../api';
 import { drawCar, drawPerson, drawTreeCanopy, drawTreeShadow, type CarLook, type Outfit } from './draw';
 import { carOf, equippedLook, outfitOf, type TuningSet } from './look';
@@ -161,7 +161,7 @@ export async function renderProfile(pr: Profile) {
   if (!got.length) { g.fillStyle = '#6b604c'; g.fillText('Ficha limpa… por enquanto.', 60, ty + 6); }
   if (pr.rares.length) {
     g.fillStyle = '#16120c'; g.font = body(26, 700);
-    g.fillText(`Raros: ${pr.rares.slice(0, 3).map(r => `${r.name} #${String(r.serial).padStart(4, '0')}`).join(' · ')}`, 60, 1140, W - 120);
+    g.fillText(`Melhores itens: ${pr.rares.slice(0, 3).map(r => `${r.name}${r.serial > 0 ? ` #${String(r.serial).padStart(4, '0')}` : ''}${r.rarity ? ` (${RARITY_NAME[r.rarity]})` : ''}`).join(' · ')}`, 60, 1140, W - 120);
   }
   // carimbo
   g.save(); g.translate(880, 1000); g.rotate(-0.22);

@@ -98,10 +98,11 @@ function shade(hex: string) {
 }
 
 /** Miniatura de um item: roupa (pessoa de cima), carro, joia ou arma, com fundo da raridade. */
-export function ItemPreview({ item, size = 72 }: { item: DiamondItem; size?: number }) {
+export function ItemPreview({ item, size = 72, rarity }: { item: DiamondItem; size?: number; rarity?: Rarity }) {
+  const r = rarity ?? rarityOf(item);
   return (
-    <DrawCanvas w={size} h={size} deps={[item.id, size]} className={`preview r-${rarityOf(item)}`} label={item.name} draw={g => {
-      backdrop(g, size, rarityOf(item));
+    <DrawCanvas w={size} h={size} deps={[item.id, size, r]} className={`preview r-${r}`} label={item.name} draw={g => {
+      backdrop(g, size, r);
       if (item.slot === 'vehicle') {
         const L = item.vehicleType === 'moto' ? 12.5 : 18.5;
         drawCar(g, size / 2, size / 2, -Math.PI / 2, carOf(item, '#3b4252'), (size * 0.86) / L);

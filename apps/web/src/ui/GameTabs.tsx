@@ -3,8 +3,10 @@ import { useEffect, useRef, useState } from 'react';
 import {
   DECOR_ITEMS, DECOR_SLOTS, TUNING, TUNING_SLOTS, DIAMOND_ITEMS, PARTS, PART_FOR, RARITY_NAME, RULES, ownsItem, partsForTier, rarityOf, UPGRADE_MAX, UPGRADE_TRACKS, UPGRADE_VIP_DISCOUNT,
   burnedUntil, formatCash, isVip, totalDiamonds, upgradeCost, upgradeMinLevel,
-  type Action, type CosmeticSlot, type DecorSlot, type PlayerState,
+  GEAR, GEAR_SETS, GEAR_SLOTS, PERKS, STATS, equippedGear, gearScore, gearSummary, repairCost, statText,
+  type Action, type CosmeticSlot, type DecorSlot, type GearSlot, type PlayerState, type StatId,
 } from '@gti/shared';
+import { GearCard } from './Gear';
 import { useNow } from './Hud';
 import { DecorThumb, GangPreview, ItemPreview, RoomView } from './Preview';
 import Icon from './Icon';
@@ -27,47 +29,41 @@ export function LookPanel({ p, act }: { p: PlayerState; act: Act }) {
   const look = equippedLook(p);
   const box = useRef<HTMLDivElement>(null);
   const [w, setW] = useState(320);
+  const [filter, setFilter] = useState<GearSlot | 'tudo'>('tudo');
   useEffect(() => { const el = box.current; if (el) setW(Math.floor(el.clientWidth)); }, []);
-  const optional = (slot: CosmeticSlot | 'rare') => slot === 'jewelry' || slot === 'weapon';
+  const summary = gearSummary(p);
+  const onUids = new Set(Object.values(p.gearOn ?? {}));
+  const slotOf = (itemId: string) => DIAMOND_ITEMS.find(i => i.id === itemId)?.slot;
+  const bag = [...p.inventory.rares]
+    .filter(g => filter === 'tudo' || slotOf(g.itemId) === filter)
+    .sort((a, b) => Number(onUids.has(b.uid)) - Number(onUids.has(a.uid)) || gearScore(b) - gearScore(a));
+  const active = STATS.filter(st => summary.stats[st.id] > 0);
 
-  const section = (slot: CosmeticSlot | 'rare', title: string, lead: string) => (
+  // Visual sem status: o que já vem no começo e o que foi comprado antes dos drops
+  const visual = (slot: CosmeticSlot, title: string, lead: string, shop = false) => (
     <>
       <h3>{title}</h3>
       <p className="lead">{lead}</p>
       <div className="look-grid">
-        {DIAMOND_ITEMS.filter(i => (slot === 'rare' ? !!i.rare : i.slot === slot && !i.rare) && (!i.exclusive || ownsItem(p, i.id)))
-          .sort((a, b) => slot === 'rare' ? Number(ownsItem(p, b.id)) - Number(ownsItem(p, a.id)) : 0).map(i => {
-          const owned = ownsItem(p, i.id);
-          const serials = p.inventory.rares.filter(r => r.itemId === i.id).map(r => `#${String(r.serial).padStart(4, '0')}`);
-          const on = i.slot ? p.equipped[i.slot] === i.id : false;
-          const islot = i.slot ?? 'character';
+        {DIAMOND_ITEMS.filter(i => i.slot === slot && !i.rare && (shop ? !i.exclusive || ownsItem(p, i.id) : p.cosmetics.includes(i.id))).map(i => {
+          const owned = p.cosmetics.includes(i.id);
+          const on = i.slot ? p.equipped[i.slot] === i.id && !p.gearOn?.[i.slot as GearSlot] : false;
           const burnt = burnedUntil(p, i.id);
           const hot = burnt > now;
-          const r = rarityOf(i);
+          const optional = slot === 'jewelry' || slot === 'weapon';
           return (
-            <div key={i.id} className={`look r-${r} ${on ? 'on' : ''} ${hot ? 'hot' : ''}`} title={i.description}>
+            <div key={i.id} className={`look ${on ? 'on' : ''} ${hot ? 'hot' : ''}`} title={i.description}>
               {slot !== 'hideout' || i.sprite ? <ItemPreview item={i} /> : <span className="swatch big" style={{ background: i.color }} />}
-              <span className="tag-row">
-                <span className={`rarity r-${r}`}>{RARITY_NAME[r]}</span>
-                {i.priceDiamonds > 0 && !i.priceCash && <Icon name="i_vip" size={1.3} title="VIP: custa diamantes" />}
-              </span>
               <strong>{i.name}</strong>
               <span className="desc">{i.description}</span>
               {hot && <span className="badge weak">Queimado até {hhmm(burnt)}</span>}
-              {i.rare && <span className="small muted">{serials.length ? serials.join(' ') : `Tiragem de ${i.rare.supply}`}</span>}
               {owned
-                ? <button className={on && !optional(islot) ? 'ghost small' : on ? 'small ghost' : 'small'} disabled={(on && !optional(islot)) || hot}
-                    onClick={() => act({ type: 'equip', itemId: i.id })}>
-                    {on ? (optional(islot) ? 'Tirar' : 'Em uso') : hot ? `Volta em ${left(burnt - now)}` : 'Usar'}
+                ? <button className={on ? 'small ghost' : 'small'} disabled={(on && !optional) || hot} onClick={() => act({ type: 'equip', itemId: i.id })}>
+                    {on ? (optional ? 'Tirar' : 'Em uso') : hot ? `Volta em ${left(burnt - now)}` : 'Usar'}
                   </button>
-                : i.rare ? <span className="small muted">Cai em golpes de 5★ e 6★ ou no Mercado</span>
                 : <div className="buy-row">
-                    {i.priceCash !== undefined && (
-                      <button className="small" disabled={p.cash < i.priceCash} onClick={() => act({ type: 'buyCosmetic', itemId: i.id, pay: 'cash' })}>{formatCash(i.priceCash)}</button>
-                    )}
-                    {i.priceDiamonds > 0 && (
-                      <button className="small ghost" disabled={totalDiamonds(p) < i.priceDiamonds} onClick={() => act({ type: 'buyCosmetic', itemId: i.id, pay: 'diamonds' })}>{i.priceDiamonds} ◆</button>
-                    )}
+                    {i.priceCash !== undefined && <button className="small" disabled={p.cash < i.priceCash} onClick={() => act({ type: 'buyCosmetic', itemId: i.id, pay: 'cash' })}>{formatCash(i.priceCash)}</button>}
+                    {i.priceDiamonds > 0 && <button className="small ghost" disabled={totalDiamonds(p) < i.priceDiamonds} onClick={() => act({ type: 'buyCosmetic', itemId: i.id, pay: 'diamonds' })}>{i.priceDiamonds} ◆</button>}
                   </div>}
             </div>
           );
@@ -75,6 +71,7 @@ export function LookPanel({ p, act }: { p: PlayerState; act: Act }) {
       </div>
     </>
   );
+
   return (
     <div className="panel">
       <div ref={box} className="look-hero">
@@ -86,17 +83,64 @@ export function LookPanel({ p, act }: { p: PlayerState; act: Act }) {
           <span>{look.carItem?.name}</span>
         </div>
       </div>
+
+      <div className="card gang-stats">
+        <div className="row"><strong>Status da gangue</strong><span className="small muted">{equippedGear(p).length} de 4 peças com status</span></div>
+        {active.length === 0 && <p className="small muted">Nenhum item com status em uso. Eles caem nos assaltos: quanto mais estrelas e mais longo o golpe, melhor a raridade.</p>}
+        <ul className="stat-lines">
+          {active.map(st => (
+            <li key={st.id}>
+              <span>{st.name}</span>
+              <span className={summary.raw[st.id] > st.cap ? 'capped' : ''} title={summary.raw[st.id] > st.cap ? `Passou do teto: ${Math.round(summary.raw[st.id])}% nos itens, valem ${st.cap}%` : `Teto ${st.cap}%`}>
+                {Math.round(summary.stats[st.id])}%<small> / {st.cap}%</small>
+              </span>
+            </li>
+          ))}
+        </ul>
+        {summary.sets.map(set => {
+          const def = GEAR_SETS.find(x => x.id === set.id)!;
+          return <p key={set.id} className="small"><b>Conjunto {set.name}</b> ({set.pieces}/4): {set.pieces >= 2 ? '2 peças ativas' : 'falta 1 peça para o bônus'}{set.pieces >= 4 ? ' · 4 peças ativas' : ''} <span className="muted">— 2: {Object.entries(def.two).map(([k, v]) => statText(k as StatId, v ?? 0)).join(', ')}; 4: {Object.entries(def.four).map(([k, v]) => statText(k as StatId, v ?? 0)).join(', ')}</span></p>;
+        })}
+        {summary.perks.map(id => { const pk = PERKS.find(x => x.id === id)!; return <p key={id} className="small perk">★ {pk.name}: {pk.text}</p>; })}
+      </div>
+
+      <h3>Equipamento ({p.inventory.rares.length}/{GEAR.bagMax})</h3>
       <p className="lead">
-        Com 4 estrelas a SWAT grava a roupa e o carro da gangue: os dois ficam queimados por {vip ? RULES.lookCooldownHoursVip : RULES.lookCooldownHours} h
-        {vip ? ' (Clube Rockeiro)' : ` (${RULES.lookCooldownHoursVip} h no Clube Rockeiro)`} e a gangue só volta a roubar com outro visual. Tenha sempre um reserva. Acessórios e armas não queimam. Itens com selo VIP custam diamantes.
+        Roupas, armas, acessórios e carros agora caem nos assaltos, nos planos, nos golpes em equipe e na corrida. Cada um vem com raridade e status sorteados, então dois iguais nunca são idênticos. Item que você não usa vale diamantes no Mercado.
+        Com 4 estrelas a polícia queima a roupa e o carro em uso por {vip ? RULES.lookCooldownHoursVip : RULES.lookCooldownHours} h: tenha um reserva.
       </p>
-      {section('rare', 'Raros numerados', 'Não estão na loja: caem em golpes de 5 e 6 estrelas e em planos de golpe, cada um com número de série. Compre e venda no Mercado.')}
-      {section('character', 'Roupas', 'A gangue inteira usa a mesma roupa no mapa.')}
-      {section('jewelry', 'Acessórios', 'Óculos, corrente, relógio e colete aparecem no personagem: no mapa, no esconderijo e no card de compartilhar.')}
-      {section('weapon', 'Armas', 'Só visual: a gangue anda com ela na mão. Quem aumenta a grana dos assaltos é o Arsenal, na aba Gangue.')}
-      {section('vehicle', 'Carros', 'O carro de fuga. Cada formato aparece diferente no mapa.')}
+      <div className="chips">
+        {([['tudo', 'Tudo'], ...GEAR_SLOTS.map(x => [x.id, x.name])] as [GearSlot | 'tudo', string][]).map(([id, name]) => (
+          <button key={id} className={filter === id ? 'chip active' : 'chip'} onClick={() => setFilter(id)}>{name}</button>
+        ))}
+      </div>
+      {bag.length === 0 && <p className="muted small">Nada aqui ainda. Deixe a gangue rodando: o primeiro item costuma cair na primeira hora.</p>}
+      <div className="gear-grid">
+        {bag.map(g => {
+          const on = onUids.has(g.uid);
+          const slot = slotOf(g.itemId) as GearSlot;
+          const burnt = burnedUntil(p, g.itemId);
+          const hot = burnt > now;
+          const cost = repairCost(g);
+          return (
+            <GearCard key={g.uid} g={g} on={on}>
+              <div className="buy-row">
+                {on
+                  ? <button className="small ghost" onClick={() => act({ type: 'unequipGear', slot })}>Tirar</button>
+                  : <button className="small" disabled={hot} onClick={() => act({ type: 'equipGear', uid: g.uid })}>{hot ? `Queimado até ${hhmm(burnt)}` : 'Usar'}</button>}
+                {cost > 0 && <button className="small ghost" disabled={p.cash < cost} onClick={() => act({ type: 'repairGear', uid: g.uid })} title="Zera o desgaste">Consertar {formatCash(cost)}</button>}
+              </div>
+            </GearCard>
+          );
+        })}
+      </div>
+
+      {visual('character', 'Roupas sem status', 'Visual que você já tem. Usar uma tira o status da roupa.')}
+      {visual('jewelry', 'Acessórios sem status', 'Visual que você já tem.')}
+      {visual('weapon', 'Armas sem status', 'Visual que você já tem. Quem aumenta a grana sem status é o Arsenal, na aba Gangue.')}
+      {visual('vehicle', 'Carros sem status', 'Visual que você já tem.')}
+      {visual('hideout', 'Telhado do esconderijo', 'Como a sua base aparece no mapa. Este continua na loja.', true)}
       <TuningSection p={p} act={act} />
-      {section('hideout', 'Telhado do esconderijo', 'Como a sua base aparece no mapa.')}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  BRAND, DRUGS, HEIST_PLANS, PARTS, RARE_ITEMS, ROBBERIES, RULES, currentMission, formatCash, isLookBurned, missionDone,
+  BRAND, DIAMOND_ITEMS, DRUGS, HEIST_PLANS, PARTS, RARE_ITEMS, ROBBERIES, RULES, currentMission, formatCash, isLookBurned, missionDone,
   type Action, type Currency, type GameEvent, type PlayerState, type RealMoneyProduct,
 } from '@gti/shared';
 import { api, ApiError, clearToken, getToken, initialCurrency, saveCurrency } from './api';
@@ -67,6 +67,9 @@ function describe(events: GameEvent[]): Omit<LogLine, 'id' | 'at'>[] {
       if (e.kind === 'rare') {
         const item = RARE_ITEMS.find(i => i.id === e.id);
         out.push({ kind: 'good', text: `ITEM RARO! ${item?.name ?? e.id} #${String(e.serial ?? 0).padStart(4, '0')} de ${item?.rare?.supply ?? '?'}` });
+      } else if (e.kind === 'gear') {
+        const rn = { comum: 'comum', raro: 'raro', epico: 'épico', lendario: 'LENDÁRIO' }[e.rarity ?? 'comum'];
+        out.push({ kind: 'good', text: `Caiu equipamento ${rn}: ${DIAMOND_ITEMS.find(i => i.id === e.id)?.name ?? e.id} (aba Visual)` });
       } else if (e.kind === 'plan') out.push({ kind: 'good', text: `Caiu: ${HEIST_PLANS.find(h => h.id === e.id)?.planName ?? e.id}` });
       else out.push({ kind: 'info', text: `Caiu: ${e.qty}× ${PARTS.find(x => x.id === e.id)?.name ?? e.id}` });
     }

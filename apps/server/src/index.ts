@@ -4,7 +4,7 @@ import cors from '@fastify/cors';
 import { Server as SocketServer } from 'socket.io';
 import { randomUUID } from 'node:crypto';
 import { BRAND, MARKET, REAL_MONEY_PRODUCTS, ROBBERIES, RULES, STAR_HEAT, isLookBurned, isVip, priceIn, type Action, type Currency, type PlayerState } from '@gti/shared';
-import { advance, burnLook, giveRare, migrate, newPlayer, normalizeSlots, resolveAlert, setAfterAdvance, setSerialAllocator, setTerritoryBonus } from './engine/idle';
+import { advance, burnLook, giveGear, giveRare, migrate, newPlayer, normalizeSlots, resolveAlert, setAfterAdvance, setSerialAllocator, setTerritoryBonus } from './engine/idle';
 import * as social from './social';
 import { buyListing, cancelListing, listItem, marketView, sweepExpired, type ListRequest } from './market';
 import { applyAction, applyGrant, canBuyProduct, GameError } from './engine/actions';
@@ -161,10 +161,13 @@ app.get('/api/news', async () => ({ news: social.newsFeed(store) }));
 
 app.get('/api/race', async (req) => socialReply(req, (p, now) => social.raceBoard(store, p, now), false));
 app.post('/api/race/start', async (req) => socialReply(req, (p, now) => social.startRace(p, now)));
-app.post('/api/race/finish', async (req) => socialReply(req, (p, now) => {
-  const r = social.finishRace(store, p, body(req).raceId, body(req).distance, now);
-  return { ...r, board: social.raceBoard(store, p, now) };
-}));
+app.post('/api/race/finish', async (req) => {
+  const out = socialReply(req, (p, now) => {
+    const r = social.finishRace(store, p, body(req).raceId, body(req).distance, now);
+    return { ...r, board: social.raceBoard(store, p, now) };
+  });
+  return { ...out, events: [...out.events, ...out.data.events] }; // drop da corrida aparece no diário
+});
 
 app.post('/api/gift', async (req) => socialReply(req, (p, now) => social.giftCosmetic(store, p, body(req).to, body(req).itemId, now)));
 
@@ -540,6 +543,7 @@ if (DEV) {
     p.inventory.plans.plano_carroforte = (p.inventory.plans.plano_carroforte ?? 0) + 2;
     p.inventory.plans.plano_cofre = (p.inventory.plans.plano_cofre ?? 0) + 1;
     giveRare(p, now, events); giveRare(p, now, events);
+    for (const stars of [2, 3, 4, 5, 6, 6]) giveGear(p, stars, now, events); // equipamento com status
     p.diamondsPaid += 1000;
     store.savePlayer(p);
     return { player: p, events, serverTime: now };

@@ -9,3 +9,4 @@ export * from './content/decor';
 export * from './content/police';
 export * from './content/loot';
 export * from './content/city';
+export * from './content/gear';

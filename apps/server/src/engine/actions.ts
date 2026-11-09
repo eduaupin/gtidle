@@ -2,7 +2,7 @@
 import {
   DIAMOND_ITEMS, DISTRICTS, DRUGS, PROPERTIES, REAL_MONEY_PRODUCTS, ROBBERIES, RULES,
   costAt, dealingPointCost, isJailed, isVip, labUpgradeCost, lawyerCost, totalDiamonds,
-  DECOR_ITEMS, HEIST_PLANS, INSURANCE, LAUNDER, TUNING, insuranceCost, PARTS, PART_FOR, STAR_HEAT, UPGRADE_MAX, isLookBurned, ownsItem, partsForTier, burnedUntil, currentMission, missionDone, upgradeCost, upgradeMinLevel,
+  DECOR_ITEMS, HEIST_PLANS, isGearSlot, repairCost, INSURANCE, LAUNDER, TUNING, insuranceCost, PARTS, PART_FOR, STAR_HEAT, UPGRADE_MAX, isLookBurned, ownsItem, partsForTier, burnedUntil, currentMission, missionDone, upgradeCost, upgradeMinLevel,
   type Action, type GameEvent, type Grant, type PlayerState,
 } from '@gti/shared';
 import { enterHideout, gainXp, leaveHideout, normalizeSlots, resolveAlert } from './idle';
@@ -189,8 +189,38 @@ export function applyAction(p: PlayerState, a: Action, now: number): GameEvent[]
         fail(`A polícia conhece esse visual até ${hhmm}`);
       }
       // joia e arma são opcionais: equipar de novo o mesmo item tira
-      if ((slot === 'jewelry' || slot === 'weapon') && p.equipped[slot] === item.id) { p.equipped[slot] = null; return; }
+      if ((slot === 'jewelry' || slot === 'weapon') && p.equipped[slot] === item.id) { p.equipped[slot] = null; delete p.gearOn[slot]; return; }
       p.equipped[slot] = item.id;
+      if (isGearSlot(slot)) delete p.gearOn[slot]; // visual sem status
+      return;
+    }
+    case 'equipGear': {
+      const g = p.inventory.rares.find(r => r.uid === a.uid) ?? fail('Item não está na mochila');
+      const item = DIAMOND_ITEMS.find(i => i.id === g.itemId) ?? fail('Item não existe');
+      const gslot = item.slot;
+      if (!isGearSlot(gslot)) return fail('Item não equipável');
+      const burnt = burnedUntil(p, item.id);
+      if (burnt > now) {
+        const hhmm = new Date(burnt - 3 * 3600_000).toISOString().slice(11, 16);
+        fail(`A polícia conhece esse visual até ${hhmm}`);
+      }
+      p.equipped[gslot] = item.id;
+      p.gearOn[gslot] = g.uid;
+      return;
+    }
+    case 'unequipGear': {
+      if (!isGearSlot(a.slot)) fail('Peça inválida');
+      delete p.gearOn[a.slot];
+      if (a.slot === 'jewelry' || a.slot === 'weapon') p.equipped[a.slot] = null;
+      else p.equipped[a.slot] = a.slot === 'character' ? 'skin_padrao' : 'carro_padrao';
+      return;
+    }
+    case 'repairGear': {
+      const g = p.inventory.rares.find(r => r.uid === a.uid) ?? fail('Item não está na mochila');
+      const cost = repairCost(g);
+      if (cost <= 0) fail('Esse item está novo');
+      spendCash(p, cost);
+      g.wear = 0;
       return;
     }
     case 'claimMission': {
@@ -212,6 +242,7 @@ export function applyAction(p: PlayerState, a: Action, now: number): GameEvent[]
       const item = DIAMOND_ITEMS.find(i => i.id === a.itemId) ?? fail('Item não existe');
       if (item.kind !== 'cosmetic' || item.exclusive) fail('Item não está à venda');
       if (item.rare) fail('Item raro: só cai em golpes grandes ou no mercado');
+      if (isGearSlot(item.slot)) fail('Roupas, armas, acessórios e carros agora caem nos assaltos, com status. Troque no Mercado.');
       if (p.cosmetics.includes(item.id)) fail('Você já tem esse item');
       if (a.pay === 'cash') {
         if (!item.priceCash) fail('Esse item não se compra com grana');

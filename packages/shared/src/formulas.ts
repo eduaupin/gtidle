@@ -1,5 +1,6 @@
 import { RULES } from './content/world';
 import type { PlayerState } from './types';
+import { gearFrac } from './content/gear';
 
 /** XP total para sair do nível n para n+1 */
 export const xpToNext = (level: number) => Math.floor(20 * Math.pow(level, 1.8));
@@ -23,7 +24,8 @@ export const offlineCapMs = (p: PlayerState, now: number) =>
 export const cashMult = (p: PlayerState, now: number) => isVip(p, now) ? RULES.vipCashMult : 1;
 export const xpMult = (p: PlayerState, now: number) => isVip(p, now) ? RULES.vipXpMult : 1;
 
-export const lawyerCost = (p: PlayerState) => costAt(RULES.lawyerBaseCost, Math.floor(p.level / 3));
+/** Advogado: o status Lábia dos itens dá desconto */
+export const lawyerCost = (p: PlayerState) => Math.floor(costAt(RULES.lawyerBaseCost, Math.floor(p.level / 3)) * (1 - gearFrac(p, 'lawyer')));
 export const labUpgradeCost = (p: PlayerState) => costAt(RULES.labUpgradeBaseCost, p.lab.level);
 export const dealingPointCost = (p: PlayerState) => costAt(RULES.dealingPointBaseCost, p.dealing.points);
 export const totalDiamonds = (p: PlayerState) => p.diamondsPaid + p.diamondsEarned;

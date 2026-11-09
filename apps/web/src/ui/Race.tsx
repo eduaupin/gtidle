@@ -3,7 +3,7 @@
 // No fim sai um GIF dos últimos segundos para compartilhar.
 import { useEffect, useRef, useState } from 'react';
 import { GIFEncoder, applyPalette, quantize } from 'gifenc';
-import { RACE, formatCash, type PlayerState } from '@gti/shared';
+import { RACE, formatCash, raceParams, type PlayerState } from '@gti/shared';
 import { api, type RaceResult, type StateResponse } from '../api';
 import { drawCar, type CarLook } from '../game/draw';
 import { equippedLook } from '../game/look';
@@ -76,6 +76,7 @@ export default function RaceModal({ p, onState, onClose }: { p: PlayerState; onS
     const g = ref.current!.getContext('2d')!;
     const rand = lcg(seed);
     const { car: look } = equippedLook(p);
+    const prm = raceParams(p); // status do carro: aceleração, velocidade final e lataria
     const traffic: Car[] = [];
     const frames: ImageData[] = [];
     const small = document.createElement('canvas'); small.width = GIF_W; small.height = GIF_H;
@@ -87,7 +88,7 @@ export default function RaceModal({ p, onState, onClose }: { p: PlayerState; onS
       t += dt;
       if (input.current) { lane = Math.max(0, Math.min(RACE.lanes - 1, lane + input.current)); input.current = 0; }
       x += (laneX(lane) - x) * Math.min(1, dt * 14);
-      v = Math.min(RACE.maxSpeed, v + RACE.accel * dt);
+      v = Math.min(prm.maxSpeed, v + prm.accel * dt);
       dist += v * dt;
       // trânsito: carros mais lentos na mesma direção (descem na tela pela diferença de velocidade)
       nextSpawn -= dt;
@@ -107,7 +108,7 @@ export default function RaceModal({ p, onState, onClose }: { p: PlayerState; onS
       if (t > hitUntil) {
         for (const c of traffic) {
           if (Math.abs(laneX(c.lane) - x) < CAR_W * 0.9 && Math.abs(c.y - CAR_Y) < CAR_L * 0.85) {
-            v = Math.max(RACE.baseSpeed * 0.5, v * RACE.crashKeep);
+            v = Math.max(RACE.baseSpeed * 0.5, v * prm.crashKeep);
             hitUntil = t + 1.2;
             c.y = H + CAR_L * 2; // tira o carro da frente
             break;

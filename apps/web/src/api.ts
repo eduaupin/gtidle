@@ -1,4 +1,4 @@
-import type { Action, Currency, GameEvent, PlayerState, RareInstance, RealMoneyProduct } from '@gti/shared';
+import type { Action, Currency, GameEvent, PlayerState, RareInstance, Rarity, RealMoneyProduct } from '@gti/shared';
 
 const TOKEN_KEY = 'nh_token';
 
@@ -80,12 +80,13 @@ export interface RaceResult { distance: number; cash: number; rewarded: boolean;
 export interface Profile {
   nick: string; code: string; level: number; vip: boolean; founder: boolean; crew: { name: string; tag: string } | null;
   district: string; since: number; equipped: PlayerState['equipped']; tuning: Record<string, string>;
-  trophies: string[]; rares: { itemId: string; serial: number; name: string }[];
+  trophies: string[]; rares: { itemId: string; serial: number; name: string; rarity?: Rarity; stats?: RareInstance['stats']; perk?: RareInstance['perk'] | null; set?: RareInstance['set'] | null }[];
   stats: { cashEarned: number; robberies: number; jailed: number; biggestHeist: number; laundered: number; teamHeists: number; raceBest: number; territories: number; playDays: number };
 }
 export interface AuctionInfo {
   id: string; seller: string; mineSeller: boolean; itemId: string; serial: number; name: string;
   start: number; bid: number; bidder: string | null; mineBid: boolean; bids: number; minBid: number; endsAt: number; highlight: boolean;
+  rarity?: Rarity; stats?: RareInstance['stats']; perk?: RareInstance['perk']; set?: RareInstance['set'];
 }
 export interface AuctionView { open: AuctionInfo[]; recent: AuctionInfo[]; window: boolean; nextEnd: number }
 export type With<T> = StateResponse & { data: T };

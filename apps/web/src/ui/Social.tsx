@@ -6,6 +6,7 @@ import { PHOTO_POSES, PHOTO_SCENES, inviteUrl, profileLook, profileUrl, renderPh
 import { drawCar, drawPerson } from '../game/draw';
 import { DrawCanvas } from './Preview';
 import ShareImage from './ShareImage';
+import { GearCard } from './Gear';
 
 export function PhotoModal({ p, onClose }: { p: PlayerState; onClose: () => void }) {
   const [scene, setScene] = useState<PhotoScene>('farol');
@@ -94,8 +95,10 @@ export function ProfileBody({ pr }: { pr: Profile }) {
       </div>
       {pr.rares.length > 0 && (
         <>
-          <h4>Raros</h4>
-          <p className="small">{pr.rares.map(r => `${r.name} #${String(r.serial).padStart(4, '0')}`).join(' · ')}</p>
+          <h4>Melhores itens</h4>
+          <div className="gear-grid">
+            {pr.rares.slice(0, 4).map((r, i) => <GearCard key={i} g={{ ...r, perk: r.perk ?? undefined, set: r.set ?? undefined }} size={48} />)}
+          </div>
         </>
       )}
     </div>

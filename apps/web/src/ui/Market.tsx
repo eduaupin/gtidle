@@ -2,26 +2,28 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   DIAMOND_ITEMS, DROP_RULES, HEIST_PLANS, MARKET, PARTS, RARE_ITEMS, formatDuration,
-  type PlayerState,
+  type PlayerState, type RareInstance,
 } from '@gti/shared';
 import { api, type ListRequest, type MarketListing, type MarketResponse, type MarketView, type StateResponse } from '../api';
 import { showRewardedAd } from '../ads';
 import { DecorThumb, ItemPreview } from './Preview';
 import Icon from './Icon';
 import AuctionSection from './Auction';
+import { GearStats, RarityTag, gearName } from './Gear';
+import { gearScore } from '@gti/shared';
 import { useNow } from './Hud';
 
 type Filter = 'tudo' | 'rare' | 'part' | 'plan';
-const FILTERS: [Filter, string][] = [['tudo', 'Tudo'], ['rare', 'Raros numerados'], ['part', 'Peças'], ['plan', 'Planos de golpe']];
+const FILTERS: [Filter, string][] = [['tudo', 'Tudo'], ['rare', 'Equipamentos'], ['part', 'Peças'], ['plan', 'Planos de golpe']];
 
 const PLAN_ICON: Record<string, string> = { plano_carroforte: 'vip_black', plano_cofre: 'e_safe_big', plano_iate: 'heli_red_white' };
-const serial = (n: number, supply?: number) => `#${String(n).padStart(4, '0')}${supply ? ` de ${supply}` : ''}`;
+const serial = (n: number, supply?: number) => (n > 0 ? `#${String(n).padStart(4, '0')}${supply ? ` de ${supply}` : ''}` : '');
 
 /** Miniatura de qualquer coisa negociável. */
-function Thumb({ kind, itemId, size = 64 }: { kind: MarketListing['kind']; itemId: string; size?: number }) {
+function Thumb({ kind, itemId, size = 64, rarity }: { kind: MarketListing['kind']; itemId: string; size?: number; rarity?: import('@gti/shared').Rarity }) {
   if (kind === 'rare') {
     const item = DIAMOND_ITEMS.find(i => i.id === itemId);
-    return item ? <ItemPreview item={item} size={size} /> : null;
+    return item ? <ItemPreview item={item} size={size} rarity={rarity} /> : null;
   }
   const sprite = kind === 'part' ? PARTS.find(p => p.id === itemId)?.icon : PLAN_ICON[itemId];
   return sprite ? <DecorThumb sprite={sprite} size={size} bg={kind === 'plan' ? '#3d2a10' : '#2f3a4f'} /> : null;
@@ -86,15 +88,17 @@ export default function MarketPanel({ p, onState, onVip }: { p: PlayerState; onS
   const setDraft = (key: string, d: { qty: number; price: number }) => setDrafts(s => ({ ...s, [key]: d }));
   const full = me.used >= me.slots;
 
-  const sellRow = (key: string, kind: MarketListing['kind'], itemId: string, label: string, have: number, req: (d: { qty: number; price: number }) => ListRequest) => {
+  const sellRow = (key: string, kind: MarketListing['kind'], itemId: string, label: string, have: number, req: (d: { qty: number; price: number }) => ListRequest, gear?: RareInstance) => {
     const d = draft(key, kind, itemId, have);
     const stat = view.stats[itemId];
+    const inUse = gear && Object.values(p.gearOn ?? {}).includes(gear.uid);
     return (
       <div key={key} className="sell-row">
-        <Thumb kind={kind} itemId={itemId} size={48} />
+        <Thumb kind={kind} itemId={itemId} size={48} rarity={gear?.rarity} />
         <div className="sell-info">
-          <strong>{label}</strong>
-          <span className="small muted">{kind === 'rare' ? 'Único' : `Você tem ${have}`}{stat ? ` · média ${Math.round(stat.avg)}◆ cada` : ''}</span>
+          <strong>{label} {gear && <RarityTag r={gear.rarity} />}</strong>
+          {gear && <GearStats g={gear} compact />}
+          <span className="small muted">{kind === 'rare' ? (inUse ? 'Em uso: sai do corpo ao anunciar' : 'Único') : `Você tem ${have}`}{stat ? ` · média ${Math.round(stat.avg)}◆ cada` : ''}</span>
         </div>
         {kind !== 'rare' && (
           <label className="field">Qtd
@@ -111,7 +115,7 @@ export default function MarketPanel({ p, onState, onVip }: { p: PlayerState; onS
     );
   };
 
-  const rares = p.inventory.rares;
+  const rares = [...p.inventory.rares].sort((a, b) => gearScore(b) - gearScore(a));
   const parts = PARTS.filter(x => p.inventory.parts[x.id] > 0);
   const plans = HEIST_PLANS.filter(h => (p.inventory.plans[h.id] ?? 0) > 0);
   const usd = (me.balance / 1000) * view.withdraw.usdPer1000;
@@ -119,7 +123,7 @@ export default function MarketPanel({ p, onState, onVip }: { p: PlayerState; onS
   return (
     <div className="panel market">
       <p className="lead">
-        Compra e venda entre jogadores. Só itens que caem nos assaltos: <b>raros numerados</b>, <b>peças de evolução</b> e <b>planos de golpe</b>.
+        Compra e venda entre jogadores. Só itens que caem jogando: <b>equipamentos com status</b> (roupas, armas, acessórios e carros, incluindo os raros numerados), <b>peças de evolução</b> e <b>planos de golpe</b>.
         Paga com diamantes comprados ou saldo de vendas.
       </p>
 
@@ -165,9 +169,9 @@ export default function MarketPanel({ p, onState, onVip }: { p: PlayerState; onS
           return (
             <div key={l.id} className={`listing ${l.sellerVip ? 'hot' : ''}`}>
               {l.sellerVip && <span className="flag">Destaque</span>}
-              <Thumb kind={l.kind} itemId={l.itemId} />
-              <strong>{l.name}</strong>
-              <span className="small">{l.rare ? serial(l.rare.serial, supply) : `${l.qty}×`}</span>
+              <Thumb kind={l.kind} itemId={l.itemId} rarity={l.rare?.rarity} />
+              <strong>{l.rare ? gearName(l.rare) : l.name}</strong>
+              {l.rare ? <><RarityTag r={l.rare.rarity} />{supply && <span className="small">{serial(l.rare.serial, supply)}</span>}<GearStats g={l.rare} compact /></> : <span className="small">{l.qty}×</span>}
               <span className="small muted">{l.sellerVip && '★ '}{l.sellerNick} · vence em {formatDuration((l.expiresAt - now) / 1000)}</span>
               {stat && <span className="small muted">Média: {Math.round(stat.avg * l.qty)} ◆</span>}
               <button className="small" disabled={busy !== null || me.balance + me.paid < l.price}
@@ -192,7 +196,7 @@ export default function MarketPanel({ p, onState, onVip }: { p: PlayerState; onS
       <div className="sell-list">
         {rares.map(r => {
           const item = DIAMOND_ITEMS.find(i => i.id === r.itemId);
-          return sellRow(r.uid, 'rare', r.itemId, `${item?.name ?? r.itemId} ${serial(r.serial)}`, 1, d => ({ kind: 'rare', uid: r.uid, price: d.price }));
+          return sellRow(r.uid, 'rare', r.itemId, `${item?.name ?? r.itemId} ${serial(r.serial)}`, 1, d => ({ kind: 'rare', uid: r.uid, price: d.price }), r);
         })}
         {parts.map(x => sellRow(x.id, 'part', x.id, x.name, p.inventory.parts[x.id], d => ({ kind: 'part', itemId: x.id, qty: d.qty, price: d.price })))}
         {plans.map(h => sellRow(h.id, 'plan', h.id, h.planName, p.inventory.plans[h.id] ?? 0, d => ({ kind: 'plan', itemId: h.id, qty: d.qty, price: d.price })))}

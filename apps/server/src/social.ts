@@ -5,9 +5,9 @@ import { randomUUID } from 'node:crypto';
 import {
   AUCTION, CREW, DIAMOND_ITEMS, DISTRICTS, MARKET, RACE, REFERRAL, TEAM_HEISTS, TEAM_LOBBY_HOURS, TEAM_ROLES, TERRITORY,
   auctionEnd, brDay, brWeek, formatCash, isAuctionWindow, isVip, marketFee, ownsItem, previousWeek, raceMaxDistance,
-  raceReward, trophiesOf, type GameEvent, type PlayerState, type RareInstance, type TeamRole,
+  raceReward, raceParams, gearSummary, gearScore, trophiesOf, type GameEvent, type PlayerState, type RareInstance, type TeamRole,
 } from '@gti/shared';
-import { gainXp, grantTeamReward, jobById, makeCode } from './engine/idle';
+import { gainXp, giveGear, grantTeamReward, jobById, makeCode } from './engine/idle';
 import type { Store } from './store/store';
 
 export class SocialError extends Error { statusCode = 400; }
@@ -56,7 +56,9 @@ export const newsFeed = (s: Store) => news(s).slice(0, 40);
 const lastHeadline = new Map<string, number>();
 const itemName = (id: string) => DIAMOND_ITEMS.find(i => i.id === id)?.name ?? id;
 const districtName = (id: string) => DISTRICTS.find(d => d.id === id)?.name ?? id;
-const serialStr = (n: number) => `#${String(n).padStart(4, '0')}`;
+const serialStr = (n: number) => (n > 0 ? `#${String(n).padStart(4, '0')}` : '');
+const lowSerial = (n: number) => n > 0 && n <= 10;
+const RARITY_LABEL: Record<string, string> = { comum: 'comum', raro: 'raro', epico: 'épico', lendario: 'lendário' };
 
 // ---------------- bondes ----------------
 export function crewOf(s: Store, p: PlayerState) { return p.crewId ? crews(s)[p.crewId] : undefined; }
@@ -145,7 +147,8 @@ export function settleTerritories(s: Store, now: number) {
       const m = s.getPlayer(id);
       if (!m) continue;
       m.stats.territoriesWon = (m.stats.territoriesWon ?? 0) + ds.length;
-      inbox(m, `Seu bonde domina ${names} nesta semana: +${Math.round(TERRITORY.cashBonus * 100)}% de grana nos assaltos de lá.`, now);
+      giveGear(m, 6, now, []); // prêmio da semana: um equipamento de 6 estrelas
+      inbox(m, `Seu bonde domina ${names} nesta semana: +${Math.round(TERRITORY.cashBonus * 100)}% de grana nos assaltos de lá e um equipamento de prêmio na mochila.`, now);
       s.savePlayer(m);
     }
   }
@@ -191,7 +194,7 @@ export function onAdvance(s: Store) {
         if (p.crewId && job) {
           const doc = territory(s);
           const byCrew = ((doc.points[week] ??= {})[job.district] ??= {});
-          byCrew[p.crewId] = (byCrew[p.crewId] ?? 0) + e.cash * TERRITORY.pointsPerCash;
+          byCrew[p.crewId] = (byCrew[p.crewId] ?? 0) + e.cash * TERRITORY.pointsPerCash * (1 + gearSummary(p).stats.turf / 100);
           s.touch();
         }
         // golpe grande vira manchete (no máximo uma por jogador a cada 30 min)
@@ -199,6 +202,9 @@ export function onAdvance(s: Store) {
           lastHeadline.set(p.id, now);
           addNews(s, { kind: 'heist', nick: p.nick, text: `${job.name} em ${districtName(job.district)}: ${p.nick} leva ${formatCash(e.cash)}.` }, now);
         }
+      }
+      if (e.type === 'drop' && e.kind === 'gear' && e.rarity === 'lendario') {
+        addNews(s, { kind: 'rare', nick: p.nick, text: `${p.nick} achou um item lendário: ${itemName(e.id)}.` }, now);
       }
       if (e.type === 'drop' && e.kind === 'rare') {
         addNews(s, { kind: 'rare', nick: p.nick, text: `${p.nick} achou ${itemName(e.id)} ${serialStr(e.serial ?? 0)}.` }, now);
@@ -305,7 +311,7 @@ export function sweepTeams(s: Store, now: number) {
       for (const [role, id] of Object.entries(t.slots)) {
         const m = id && s.getPlayer(id);
         if (!m) continue;
-        const { cash, events } = grantTeamReward(m, def, now);
+        const { cash, events } = grantTeamReward(m, def, now, role);
         total += cash; nicks.push(m.nick);
         const roleName = TEAM_ROLES.find(r => r.id === role)!.name.toLowerCase();
         inbox(m, `${def.name} concluído! Sua parte como ${roleName}: ${formatCash(cash)} em grana suja.`, now);
@@ -352,7 +358,7 @@ export function finishRace(s: Store, p: PlayerState, raceId: unknown, distance: 
   if (elapsed < RACE.seconds - 2) fail('Corrida terminou rápido demais');
   const d = Math.floor(Number(distance));
   // teto físico: ninguém anda mais do que acelerando sem bater o tempo todo
-  if (!Number.isFinite(d) || d < 0 || d > raceMaxDistance(Math.min(elapsed, RACE.seconds + 5))) fail('Distância impossível');
+  if (!Number.isFinite(d) || d < 0 || d > raceMaxDistance(Math.min(elapsed, RACE.seconds + 5), raceParams(p))) fail('Distância impossível');
   const day = brDay(now);
   if (p.race.day !== day) p.race = { day, runs: 0 };
   p.race.runs += 1;
@@ -361,6 +367,8 @@ export function finishRace(s: Store, p: PlayerState, raceId: unknown, distance: 
   if (cash) { p.cash += cash; p.stats.cashEarned += cash; }
   const events: GameEvent[] = [];
   if (rewarded) gainXp(p, Math.round(d / 20), events);
+  // corrida boa pode soltar equipamento (só nas corridas premiadas do dia)
+  if (rewarded && d >= 1000 && Math.random() < 0.3) giveGear(p, d >= 1500 ? 5 : 4, now, events);
   p.stats.racesRun = (p.stats.racesRun ?? 0) + 1;
   const prevBest = p.stats.raceBest ?? 0;
   p.stats.raceBest = Math.max(prevBest, d);
@@ -408,8 +416,8 @@ export function giftCosmetic(s: Store, from: PlayerState, toCode: unknown, itemI
 // ---------------- ficha criminal ----------------
 export function profile(s: Store, target: PlayerState, now: number) {
   const c = crewOf(s, target);
-  const rares = [...target.inventory.rares].sort((a, b) => a.serial - b.serial).slice(0, 12)
-    .map(r => ({ itemId: r.itemId, serial: r.serial, name: itemName(r.itemId) }));
+  const rares = [...target.inventory.rares].sort((a, b) => gearScore(b) - gearScore(a)).slice(0, 12)
+    .map(r => ({ itemId: r.itemId, serial: r.serial, name: itemName(r.itemId), rarity: r.rarity ?? 'comum', stats: r.stats ?? {}, perk: r.perk ?? null, set: r.set ?? null }));
   return {
     nick: target.nick, code: target.referral.code, level: target.level, vip: isVip(target, now), founder: target.flags.founder,
     crew: c ? { name: c.name, tag: c.tag } : null,
@@ -469,6 +477,7 @@ export function createAuction(s: Store, p: PlayerState, uid: unknown, start: unk
   const idx = p.inventory.rares.findIndex(r => r.uid === uid);
   if (idx < 0) fail('Você não tem esse item');
   const [rare] = p.inventory.rares.splice(idx, 1);
+  for (const k of Object.keys(p.gearOn) as (keyof typeof p.gearOn)[]) if (p.gearOn[k] === rare.uid) delete p.gearOn[k];
   const e = p.equipped;
   if (!ownsItem(p, rare.itemId)) {
     if (e.character === rare.itemId) e.character = 'skin_padrao';
@@ -482,7 +491,7 @@ export function createAuction(s: Store, p: PlayerState, uid: unknown, start: unk
   };
   auctions(s).push(a);
   // número baixo é manchete
-  if (rare.serial <= 10) addNews(s, { kind: 'auction', nick: p.nick, text: `No leilão: ${itemName(rare.itemId)} ${serialStr(rare.serial)}, lance inicial ${price} diamantes.` }, now);
+  if (lowSerial(rare.serial) || rare.rarity === 'lendario') addNews(s, { kind: 'auction', nick: p.nick, text: `No leilão: ${itemName(rare.itemId)} ${serialStr(rare.serial)}, lance inicial ${price} diamantes.` }, now);
   s.savePlayer(p); s.touch();
   return a;
 }
@@ -523,10 +532,11 @@ export function auctionView(s: Store, p: PlayerState, now: number) {
   const show = (a: Auction) => ({
     id: a.id, seller: a.sellerNick, mineSeller: a.sellerId === p.id, itemId: a.rare.itemId, serial: a.rare.serial, name: itemName(a.rare.itemId),
     start: a.start, bid: a.bid, bidder: a.bidderNick, mineBid: a.bidderId === p.id, bids: a.bids, minBid: minBid(a), endsAt: a.endsAt,
-    highlight: a.rare.serial <= 10,
+    highlight: lowSerial(a.rare.serial) || a.rare.rarity === 'lendario',
+    rarity: a.rare.rarity ?? 'comum', stats: a.rare.stats ?? {}, perk: a.rare.perk ?? null, set: a.rare.set ?? null,
   });
   const open = auctions(s).filter(a => !a.settled)
-    .sort((a, b) => Number(b.rare.serial <= 10) - Number(a.rare.serial <= 10) || a.endsAt - b.endsAt).map(show);
+    .sort((a, b) => Number(lowSerial(b.rare.serial)) - Number(lowSerial(a.rare.serial)) || gearScore(b.rare) - gearScore(a.rare) || a.endsAt - b.endsAt).map(show);
   const recent = auctions(s).filter(a => a.settled && a.bidderId).sort((a, b) => b.endsAt - a.endsAt).slice(0, 6).map(show);
   return { open, recent, window: isAuctionWindow(now), nextEnd: auctionEnd(now) };
 }

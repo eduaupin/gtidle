@@ -1,3 +1,4 @@
+import type { GearSlot, PerkId, SetId, StatId } from './content/gear';
 // Tipos compartilhados entre servidor e cliente.
 // Tudo que é "regra do jogo" vive no servidor; o cliente só exibe.
 
@@ -132,7 +133,8 @@ export interface PlayerState {
     batchesDone: number; lawyerUses: number;
     /** Quantas vezes cada assalto foi concluído */
     jobCounts: Record<string, number>;
-    biggestHeist?: number; raresFound?: number; laundered?: number; teamHeists?: number;
+    biggestHeist?: number;
+  gearFound?: number; raresFound?: number; laundered?: number; teamHeists?: number;
     raceBest?: number; racesRun?: number; territoriesWon?: number; giftsSent?: number;
   };
   /** Índice da missão atual na cadeia MISSIONS */
@@ -182,12 +184,30 @@ export interface PlayerState {
   /** Mercado: saldo de vendas (sacável no futuro) e vaga extra ganha com anúncio */
   market: { balance: number; adSlotUntil: number | null; sold: number; bought: number };
   rngSeed: number;
+  /** Equipamento com status em uso, por peça (uid do item da mochila) */
+  gearOn: Partial<Record<GearSlot, string>>;
+  /** Dia (Brasília) em que o efeito "Blindado" já foi usado */
+  perkDay?: string;
 }
 
 export type PartId = 'peca_arsenal' | 'peca_oficina' | 'peca_equipamento';
 
 /** Um item raro numerado: o número de série é único no jogo inteiro */
-export interface RareInstance { uid: string; itemId: string; serial: number }
+/**
+ * Item único da mochila: equipamento com status (roupa, arma, acessório ou carro).
+ * `serial` > 0 = raro numerado (tiragem limitada); 0 = drop comum sem número.
+ */
+export interface RareInstance {
+  uid: string;
+  itemId: string;
+  serial: number;
+  rarity?: Rarity;
+  stats?: Partial<Record<StatId, number>>;
+  set?: SetId;
+  perk?: PerkId;
+  /** Desgaste de 0 a 100: gasto rende metade até consertar */
+  wear?: number;
+}
 
 export interface Inventory {
   parts: Record<PartId, number>;
@@ -326,7 +346,7 @@ export type GameEvent =
   | { type: 'hideout_start'; until: number }
   | { type: 'hideout_ready' }
   | { type: 'hideout_done'; auto: boolean }
-  | { type: 'drop'; kind: 'part' | 'plan' | 'rare'; id: string; qty: number; serial?: number }
+  | { type: 'drop'; kind: 'part' | 'plan' | 'rare' | 'gear'; id: string; qty: number; serial?: number; rarity?: Rarity }
   | { type: 'laundered'; amount: number }
   | { type: 'confiscated'; amount: number; insured: boolean };
 
@@ -343,6 +363,9 @@ export type Action =
   | { type: 'travel'; district: DistrictId }
   | { type: 'buyDiamondItem'; itemId: string }
   | { type: 'equip'; itemId: string }
+  | { type: 'equipGear'; uid: string }
+  | { type: 'unequipGear'; slot: GearSlot }
+  | { type: 'repairGear'; uid: string }
   | { type: 'claimMission' }
   /** Só VIP: despista sem anúncio e ganha bônus. Quem não é VIP despista pela rota de anúncio. */
   | { type: 'resolveAlertVip' }

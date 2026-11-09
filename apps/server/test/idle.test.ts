@@ -252,13 +252,12 @@ describe('visual queimado, evolução e decoração', () => {
     expect(left).toBeGreaterThan(3.9 * H);
   });
 
-  it('roupa e carro novos com grana', () => {
+  it('roupa e carro não se compram mais: só caem; telhado da base continua na loja', () => {
     const p = setup();
-    p.cash = 10_000;
-    applyAction(p, { type: 'buyCosmetic', itemId: 'hatch_rebaixado', pay: 'cash' }, T0);
-    expect(p.cosmetics).toContain('hatch_rebaixado');
-    expect(p.cash).toBe(7_000);
-    expect(() => applyAction(p, { type: 'buyCosmetic', itemId: 'skin_neon', pay: 'cash' }, T0)).toThrow(/grana/);
+    p.cash = 10_000; p.diamondsPaid = 500;
+    expect(() => applyAction(p, { type: 'buyCosmetic', itemId: 'hatch_rebaixado', pay: 'cash' }, T0)).toThrow(/caem nos assaltos/);
+    applyAction(p, { type: 'buyCosmetic', itemId: 'base_cobertura', pay: 'diamonds' }, T0);
+    expect(p.cosmetics).toContain('base_cobertura');
   });
 
   it('evolução: preço alto, VIP paga 70% e o arsenal aumenta a grana', () => {
@@ -322,16 +321,14 @@ describe('procurado de 0 a 6 estrelas', () => {
 });
 
 describe('joias e armas', () => {
-  it('compra com grana, equipa e tira', () => {
+  it('visual antigo equipa e tira', () => {
     const p = newPlayer('a', 'x', T0);
-    p.cash = 20_000;
     expect(p.equipped.jewelry).toBeNull();
-    applyAction(p, { type: 'buyCosmetic', itemId: 'acc_oculos', pay: 'cash' }, T0);
+    p.cosmetics.push('acc_oculos', 'arma_pistola'); // comprados antes da mudança: continuam como visual
     applyAction(p, { type: 'equip', itemId: 'acc_oculos' }, T0);
     expect(p.equipped.jewelry).toBe('acc_oculos');
     applyAction(p, { type: 'equip', itemId: 'acc_oculos' }, T0);
     expect(p.equipped.jewelry).toBeNull();
-    applyAction(p, { type: 'buyCosmetic', itemId: 'arma_pistola', pay: 'cash' }, T0);
     applyAction(p, { type: 'equip', itemId: 'arma_pistola' }, T0);
     expect(p.equipped.weapon).toBe('arma_pistola');
   });

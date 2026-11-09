@@ -304,6 +304,33 @@ a mesma taxa do mercado.
 **Para testar em desenvolvimento:** botão "+$50.000 sujo" para a lavanderia; o leilão abre qualquer dia;
 use janelas anônimas com nicks diferentes para bonde, equipe, presentes e lances.
 
+## Equipamento com status (drops)
+
+Regras em `packages/shared/src/content/gear.ts`. Roupas, armas, acessórios e carros **não se compram mais**:
+caem nos assaltos (mais estrelas e golpes mais longos = raridade melhor), nos planos (50%), nos golpes em equipe
+(sempre um), nas corridas premiadas de 1.000 m ou mais (30%) e como prêmio semanal do território (6 estrelas).
+O visual que o jogador já tinha continua como visual sem status. A loja segue com telhado do esconderijo,
+decoração, tuning, Clube Rockeiro e diamantes.
+
+- **Raridade:** comum (1 status), raro (2), épico (3), lendário (3 + efeito único). Valores sorteados numa faixa,
+  então dois itens iguais nunca são idênticos. Os raros numerados também ganharam status (épico ou lendário).
+- **Status (22):** grana nos assaltos, respeito (XP), agilidade, discrição, intimidação, sorte, faro para raros,
+  fuga, lábia, contatos, bolso fundo, lavanderia, patrão, químico, vendedor, tempo de reação, aceleração,
+  velocidade final, lataria, dono da área, esconderijo e especialista (motorista, hacker, arrombador ou vigia).
+- **Teto:** cada status tem limite somando os itens (ex.: grana 60%, discrição 40%). Bônus de conjunto passa do teto.
+- **Conjuntos:** Bonde da Rua, Fantasma, Magnata e Rei da Pista, com bônus em 2 e 4 peças.
+- **Lendários:** Dono da Noite, Blindado, Mão Leve ou Sortudo.
+- **Desgaste:** sobe a cada assalto; gasto rende metade até consertar com grana do jogo.
+- **Mochila:** até 60 itens; cheio, o drop vira peças.
+- **Mercado e leilão:** todo item com status é negociável em diamantes.
+
+Regras fixas: nada pago sorteia item (sem caixa de recompensa paga) e o Clube Rockeiro só aumenta a quantidade
+de drops. **Venda por dinheiro real** entre jogadores fica para depois de escolher o intermediário de pagamento
+(Mercado Pago marketplace ou Stripe Connect, com identificação de quem saca, retenção contra estorno) e da
+revisão de um advogado.
+
+**Para testar:** "+ itens de mercado" agora também entrega 6 equipamentos de raridades variadas.
+
 ## Arte: folha de sprites
 
 Toda a arte do jogo vem de uma folha de sprites (`tools/sprites-source.png`). O script

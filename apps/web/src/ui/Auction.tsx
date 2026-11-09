@@ -1,11 +1,12 @@
-// Leilão de raros do fim de semana: lances ao vivo, números baixos (#0001 a #0010) em destaque.
+// Leilão de itens do fim de semana: lances ao vivo, números baixos (#0001 a #0010) em destaque.
 import { useCallback, useEffect, useState } from 'react';
 import { AUCTION, DIAMOND_ITEMS, formatDuration, type PlayerState } from '@gti/shared';
 import { api, type AuctionView, type StateResponse, type With } from '../api';
 import { ItemPreview } from './Preview';
 import { useNow } from './Hud';
+import { GearStats, RarityTag } from './Gear';
 
-const serial = (n: number) => `#${String(n).padStart(4, '0')}`;
+const serial = (n: number) => (n > 0 ? `#${String(n).padStart(4, '0')}` : '');
 
 export default function AuctionSection({ p, onState }: { p: PlayerState; onState: (r: StateResponse) => void }) {
   const now = useNow(1000);
@@ -29,8 +30,8 @@ export default function AuctionSection({ p, onState }: { p: PlayerState; onState
 
   return (
     <section className="auction">
-      <h3>Leilão de raros <span className="badge">{v.window ? 'aberto neste fim de semana' : 'abre sábado e domingo'}</span></h3>
-      <p className="small muted">Termina domingo às 22 h (Brasília). Lance nos últimos {AUCTION.extendMinutes} minutos estende o fim. Seus diamantes ficam reservados e voltam na hora se alguém cobrir. Números de #0001 a #0010 ficam em destaque.</p>
+      <h3>Leilão de itens <span className="badge">{v.window ? 'aberto neste fim de semana' : 'abre sábado e domingo'}</span></h3>
+      <p className="small muted">Termina domingo às 22 h (Brasília). Lance nos últimos {AUCTION.extendMinutes} minutos estende o fim. Seus diamantes ficam reservados e voltam na hora se alguém cobrir. Números de #0001 a #0010 e itens lendários ficam em destaque.</p>
       {msg && <p className={msg.bad ? 'msg bad' : 'msg'}>{msg.text}</p>}
       {v.open.length === 0 && <p className="muted small">Nenhum lote aberto.</p>}
       <div className="market-grid">
@@ -39,10 +40,12 @@ export default function AuctionSection({ p, onState }: { p: PlayerState; onState
           const value = bids[a.id] ?? a.minBid;
           return (
             <div key={a.id} className={`listing ${a.highlight ? 'hot' : ''}`}>
-              {a.highlight && <span className="flag">Número baixo</span>}
-              {item && <ItemPreview item={item} size={72} />}
+              {a.highlight && <span className="flag">{a.serial > 0 && a.serial <= 10 ? 'Número baixo' : 'Lendário'}</span>}
+              {item && <ItemPreview item={item} size={72} rarity={a.rarity} />}
               <b>{a.name}</b>
-              <span className="small">{serial(a.serial)}</span>
+              <RarityTag r={a.rarity} />
+              {a.serial > 0 && <span className="small">{serial(a.serial)}</span>}
+              <GearStats g={a} compact />
               <span className="small muted">de {a.seller} · {a.bids} lance{a.bids === 1 ? '' : 's'} · fecha em {formatDuration(Math.max(0, a.endsAt - now) / 1000)}</span>
               <span className="price">{a.bid ? `${a.bid.toLocaleString('pt-BR')} ◆` : `inicial ${a.start} ◆`}{a.bidder && <small> · {a.mineBid ? 'seu lance' : a.bidder}</small>}</span>
               {!a.mineSeller && !a.mineBid && (
@@ -58,7 +61,7 @@ export default function AuctionSection({ p, onState }: { p: PlayerState; onState
       {v.recent.length > 0 && <p className="small muted">Últimos arremates: {v.recent.map(a => `${a.name} ${serial(a.serial)} por ${a.bid}◆`).join(' · ')}</p>}
       {p.inventory.rares.length > 0 && (
         <div className="card row">
-          <span className="small">Leiloar um raro:</span>
+          <span className="small">Leiloar um item:</span>
           <select value={uid} onChange={e => setUid(e.target.value)} aria-label="Item para leiloar">
             <option value="">Escolha…</option>
             {p.inventory.rares.map(r => <option key={r.uid} value={r.uid}>{DIAMOND_ITEMS.find(i => i.id === r.itemId)?.name} {serial(r.serial)}</option>)}

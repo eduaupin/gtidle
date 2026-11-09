@@ -1,6 +1,7 @@
 // Regras da cidade viva: lavagem, noite, seguro, tuning, bondes, territórios, golpe em equipe,
 // corrida de rua, leilão, jornal, troféus e convites. Tudo é balanceamento: ajuste aqui.
 import type { PlayerState } from '../types';
+import { gearSummary } from './gear';
 
 /** Hora em Brasília (o jogo inteiro usa o mesmo relógio, para todo mundo viver a mesma noite) */
 export const brHour = (ms: number) => new Date(ms - 3 * 3600_000).getUTCHours();
@@ -113,10 +114,22 @@ export const RACE = {
   /** Recompensa em grana: por metro, escala com o nível */
   cashPerMeter: 0.4,
 };
+export interface RaceParams { accel: number; maxSpeed: number; crashKeep: number }
+/** Física do carro do jogador: o carro com status de Aceleração, Velocidade final e Lataria anda mais */
+export function raceParams(p?: PlayerState): RaceParams {
+  if (!p) return { accel: RACE.accel, maxSpeed: RACE.maxSpeed, crashKeep: RACE.crashKeep };
+  const s = gearSummary(p).stats;
+  return {
+    accel: RACE.accel * (1 + s.accel / 100),
+    maxSpeed: RACE.maxSpeed * (1 + s.topSpeed / 100),
+    // Lataria: perde menos velocidade (o que se perde na batida cai na proporção do status)
+    crashKeep: 1 - (1 - RACE.crashKeep) * (1 - s.armor / 100),
+  };
+}
 /** Maior distância possível em `sec` segundos sem bater (o servidor recusa acima disso) */
-export function raceMaxDistance(sec: number) {
+export function raceMaxDistance(sec: number, params: RaceParams = raceParams()) {
   let v = RACE.baseSpeed, d = 0;
-  for (let t = 0; t < sec; t += 0.05) { v = Math.min(RACE.maxSpeed, v + RACE.accel * 0.05); d += v * 0.05; }
+  for (let t = 0; t < sec; t += 0.05) { v = Math.min(params.maxSpeed, v + params.accel * 0.05); d += v * 0.05; }
   return Math.ceil(d);
 }
 export const raceReward = (distance: number, level: number) => Math.round(distance * RACE.cashPerMeter * (1 + level / 10));

@@ -4,6 +4,7 @@ import {
   DECOR_ITEMS, DEFAULT_PLACED, DIAMOND_ITEMS, DISTRICTS, DROP_RULES, HEIST_PLANS, PARTS, RARE_ITEMS, emptyInventory, ownsItem, DRUGS, PROPERTIES, ROBBERIES, RULES, STARTER_DECOR, STARTER_ITEMS,
   arsenalMult, equipamentoHeatMult, heatCapFor, starsFor, INSURANCE, LAUNDER, NIGHT, isNight, isLookBurned, oficinaMult,
   cashMult, isJailed, isTurbo, isVip, labLines, lawyerCost, nextRandom, offlineCapMs, robberyModeMult, xpMult, xpToNext,
+  GEAR, brDay, equippedGear, gearSummary, numberedRarity, rollBase, rollRarity, rollStats,
   type DrugId, type GameEvent, type PlayerState, type RobberyJob, type RobberyMode,
 } from '@gti/shared';
 
@@ -70,6 +71,7 @@ export function newPlayer(id: string, nick: string, now: number): PlayerState {
     inbox: [],
     referral: { code: makeCode(), by: null, rewarded: 0, paidOut: false },
     race: { day: '', runs: 0 },
+    gearOn: {},
     rngSeed: Math.floor(Math.random() * 2 ** 31),
   };
 }
@@ -106,6 +108,17 @@ export function migrate(p: PlayerState): PlayerState {
   p.inbox ??= [];
   p.referral ??= { code: makeCode(), by: null, rewarded: 0, paidOut: false };
   p.race ??= { day: '', runs: 0 };
+  p.gearOn ??= {};
+  // itens antigos (antes dos status) ganham raridade e status uma vez
+  for (const r of p.inventory.rares) {
+    if (r.rarity) continue;
+    const base = DIAMOND_ITEMS.find(i => i.id === r.itemId);
+    if (base) Object.assign(r, rollStats(base, base.rare ? numberedRarity(base) : 'raro', () => rnd(p)));
+  }
+  for (const [slot, uid] of Object.entries(p.gearOn)) {
+    const g = p.inventory.rares.find(r => r.uid === uid);
+    if (!g || p.equipped[slot as keyof typeof p.equipped] !== g.itemId) delete p.gearOn[slot as keyof typeof p.gearOn];
+  }
   if (!items.has(p.equipped.character) || !ownsItem(p, p.equipped.character)) p.equipped.character = 'skin_padrao';
   if (!items.has(p.equipped.vehicle) || !ownsItem(p, p.equipped.vehicle)) p.equipped.vehicle = 'carro_padrao';
   if (!items.has(p.equipped.hideout)) p.equipped.hideout = 'base_padrao';
@@ -173,10 +186,15 @@ function addHeat(p: PlayerState, amount: number, t: number, events: GameEvent[],
   if (p.heat >= 100) {
     // seguro: apreende menos grana suja e corta o tempo de cadeia (uso único)
     const insured = !!p.insurance && p.insurance.until > t;
-    const taken = Math.floor(p.dirtyCash * (insured ? INSURANCE.confiscate : LAUNDER.confiscate));
+    const gs = gearSummary(p);
+    // Blindado (lendário): a primeira prisão do dia não leva nada
+    const shielded = gs.perks.includes('blindado') && p.perkDay !== brDay(t);
+    if (shielded) p.perkDay = brDay(t);
+    const rate = (insured ? INSURANCE.confiscate : LAUNDER.confiscate) * (1 - gs.stats.pocket / 100);
+    const taken = shielded ? 0 : Math.floor(p.dirtyCash * rate);
     p.dirtyCash -= taken;
     if (insured) p.insurance = null;
-    p.jailedUntil = t + RULES.jailSec * 1000 * (insured ? INSURANCE.jailMult : 1);
+    p.jailedUntil = t + RULES.jailSec * 1000 * (insured ? INSURANCE.jailMult : 1) * (1 - gs.stats.jail / 100);
     p.heat = RULES.heatAfterJail;
     p.stats.timesJailed += 1;
     events.push({ type: 'jailed', until: p.jailedUntil });
@@ -202,7 +220,7 @@ export function burnLook(p: PlayerState, t: number, events: GameEvent[]) {
 export function enterHideout(p: PlayerState, now: number): GameEvent[] {
   const base = isVip(p, now) ? RULES.hideoutMinutesVip : RULES.hideoutMinutes;
   // 5 estrelas ou mais: helicóptero no ar, demora mais para a barra esfriar
-  const minutes = starsFor(p.heat) >= 5 ? base * RULES.heliHideoutMult : base;
+  const minutes = (starsFor(p.heat) >= 5 ? base * RULES.heliHideoutMult : base) * (1 - gearSummary(p).stats.hideout / 100);
   const resume = p.robberies.map(s => s.jobId);
   for (const s of p.robberies) { s.jobId = null; s.progressSec = 0; }
   p.hideout = { since: now, until: now + minutes * 60_000, resume, readyNotified: false };
@@ -268,7 +286,7 @@ function tickAlert(p: PlayerState, t: number, events: GameEvent[]) {
   const jobId = p.robberies[activeSlot].jobId!;
   p.alert = {
     id: `${Math.floor(t)}-${activeSlot}`, slot: activeSlot, jobId,
-    createdAt: t, expiresAt: t + RULES.alertWindowSec * 1000, status: 'pending', notified: false,
+    createdAt: t, expiresAt: t + RULES.alertWindowSec * 1000 * (1 + gearSummary(p).stats.reaction / 100), status: 'pending', notified: false,
   };
   p.nextAlertAt = null;
   events.push({ type: 'alert', jobId, expiresAt: p.alert.expiresAt });
@@ -316,7 +334,7 @@ export function giveRare(p: PlayerState, t: number, events: GameEvent[]) {
     const item = RARE_ITEMS.find(i => (x -= i.rare!.supply) < 0) ?? RARE_ITEMS[0];
     const serial = allocSerial(item.id, item.rare!.supply);
     if (serial === null) continue;
-    p.inventory.rares.push({ uid: `${item.id}#${serial}`, itemId: item.id, serial });
+    p.inventory.rares.push({ uid: `${item.id}#${serial}`, itemId: item.id, serial, ...rollStats(item, numberedRarity(item), () => rnd(p)) });
     p.stats.raresFound = (p.stats.raresFound ?? 0) + 1;
     events.push({ type: 'drop', kind: 'rare', id: item.id, qty: 1, serial });
     return;
@@ -326,10 +344,27 @@ export function giveRare(p: PlayerState, t: number, events: GameEvent[]) {
   events.push({ type: 'drop', kind: 'part', id: part.id, qty: 3 });
 }
 
+/** Entrega um equipamento com status sorteados. `stars` define a raridade; mochila cheia vira peças. */
+export function giveGear(p: PlayerState, stars: number, t: number, events: GameEvent[]) {
+  if (p.inventory.rares.length >= GEAR.bagMax) {
+    const part = PARTS[Math.floor(rnd(p) * PARTS.length)];
+    p.inventory.parts[part.id] += 2;
+    events.push({ type: 'drop', kind: 'part', id: part.id, qty: 2 });
+    return;
+  }
+  const rarity = rollRarity(stars, () => rnd(p));
+  const base = rollBase(rarity, () => rnd(p));
+  const uid = `${base.id}-${Math.floor(t).toString(36)}${Math.floor(rnd(p) * 1e6).toString(36)}`;
+  p.inventory.rares.push({ uid, itemId: base.id, serial: 0, ...rollStats(base, rarity, () => rnd(p)) });
+  p.stats.gearFound = (p.stats.gearFound ?? 0) + 1;
+  events.push({ type: 'drop', kind: 'gear', id: base.id, qty: 1, rarity });
+}
+
 /** Golpe em equipe concluído: cada membro recebe a parte dele (grana suja, XP, peças e chance de raro). */
-export function grantTeamReward(p: PlayerState, def: { cash: [number, number]; xp: number; parts: number; rareChance: number }, t: number) {
+export function grantTeamReward(p: PlayerState, def: { cash: [number, number]; xp: number; parts: number; rareChance: number; minLevel?: number }, t: number, role?: string) {
   const events: GameEvent[] = [];
-  const cash = Math.round(roll(p, def.cash) * (isVip(p, t) ? 1.1 : 1));
+  const roleBonus = role ? (gearSummary(p).stats[`role_${role}` as 'role_vigia'] ?? 0) / 100 : 0;
+  const cash = Math.round(roll(p, def.cash) * (isVip(p, t) ? 1.1 : 1) * (1 + roleBonus));
   p.dirtyCash += cash; p.stats.cashEarned += cash;
   p.stats.biggestHeist = Math.max(p.stats.biggestHeist ?? 0, cash);
   p.stats.teamHeists = (p.stats.teamHeists ?? 0) + 1;
@@ -338,13 +373,16 @@ export function grantTeamReward(p: PlayerState, def: { cash: [number, number]; x
   p.inventory.parts[part.id] += def.parts;
   events.push({ type: 'drop', kind: 'part', id: part.id, qty: def.parts });
   if (rnd(p) < def.rareChance) giveRare(p, t, events);
+  giveGear(p, (def.minLevel ?? 10) >= 55 ? 6 : 5, t, events); // golpe em equipe sempre solta um equipamento
   return { cash, events };
 }
 
 /** Sorteia o que caiu num assalto concluído. Proporcional ao tempo do golpe e às estrelas dele. */
 function rollDrops(p: PlayerState, job: RobberyJob & { rareChance?: number }, modeMult: number, t: number, events: GameEvent[]) {
   const vip = isVip(p, t) ? DROP_RULES.vipMult : 1;
-  const hours = (job.durationSec / 3600) * Math.min(1, modeMult) * vip;
+  const gs = gearSummary(p);
+  const luck = 1 + gs.stats.luck / 100;
+  const hours = (job.durationSec / 3600) * Math.min(1, modeMult) * vip * luck;
   const parts = count(p, (DROP_RULES.partsPerHourBase + DROP_RULES.partsPerHourPerStar * job.maxStars) * hours);
   if (parts > 0) {
     const part = PARTS[Math.floor(rnd(p) * PARTS.length)];
@@ -360,8 +398,18 @@ function rollDrops(p: PlayerState, job: RobberyJob & { rareChance?: number }, mo
       events.push({ type: 'drop', kind: 'plan', id: plan.id, qty: plans });
     }
   }
-  const rareRate = job.rareChance !== undefined ? job.rareChance * vip : (DROP_RULES.raresPerHour[job.maxStars] ?? 0) * hours;
+  // Mão Leve (lendário): golpe grande rende uma peça a mais
+  if (job.maxStars >= 4 && gs.perks.includes('mao_leve')) {
+    const part = PARTS[Math.floor(rnd(p) * PARTS.length)];
+    p.inventory.parts[part.id] += 1;
+    events.push({ type: 'drop', kind: 'part', id: part.id, qty: 1 });
+  }
+  const rareMult = (1 + gs.stats.rareFind / 100) * (gs.perks.includes('sortudo') ? 1.5 : 1);
+  const rareRate = (job.rareChance !== undefined ? job.rareChance * vip : (DROP_RULES.raresPerHour[job.maxStars] ?? 0) * hours) * rareMult;
   if (rareRate > 0 && rnd(p) < rareRate) giveRare(p, t, events);
+  // equipamento com status
+  const gearRate = job.rareChance !== undefined ? GEAR.planChance * vip * luck : (GEAR.perHour[job.maxStars] ?? 0) * hours;
+  if (rnd(p) < gearRate) giveGear(p, job.maxStars, t, events);
 }
 
 /** Avança o estado até `now`. Ganho offline limitado a 8 h (free) ou 16 h (VIP). */
@@ -397,11 +445,12 @@ function step(p: PlayerState, t: number, dt: number, events: GameEvent[]) {
   const jailed = isJailed(p, t);
   const speed = isTurbo(p, t) ? RULES.turboSpeedMult : 1;
   const cm = cashMult(p, t), xm = xpMult(p, t);
+  const gear = gearSummary(p), gs = gear.stats;
 
   // 1) Renda passiva dos imóveis — roda mesmo preso (a fachada não fecha).
   for (const prop of PROPERTIES) {
     const lvl = p.properties[prop.id] ?? 0;
-    if (lvl > 0) earn(p, prop.incomePerSec * lvl * dt * cm);
+    if (lvl > 0) earn(p, prop.incomePerSec * lvl * dt * cm * (1 + gs.boss / 100));
   }
 
   // Lavagem: os negócios passam a grana suja para limpa, com uma taxa.
@@ -410,13 +459,13 @@ function step(p: PlayerState, t: number, dt: number, events: GameEvent[]) {
     const moved = Math.min(p.dirtyCash, income * LAUNDER.perIncome * dt);
     if (moved > 0) {
       p.dirtyCash -= moved;
-      p.cash += moved * (1 - (isVip(p, t) ? LAUNDER.feeVip : LAUNDER.fee));
+      p.cash += moved * (1 - (isVip(p, t) ? LAUNDER.feeVip : LAUNDER.fee) * (1 - gs.launder / 100));
       p.stats.laundered = (p.stats.laundered ?? 0) + moved;
     }
   }
 
   // Procurado esfria com o tempo.
-  p.heat = Math.max(0, p.heat - RULES.heatDecayPerSec * dt);
+  p.heat = Math.max(0, p.heat - RULES.heatDecayPerSec * dt * (1 + gs.escape / 100));
 
   if (jailed) return;
 
@@ -430,13 +479,15 @@ function step(p: PlayerState, t: number, dt: number, events: GameEvent[]) {
     if (!slot.jobId || lookBurned) continue; // visual queimado: a gangue não sai até trocar de roupa e carro
     const job = robberyById.get(slot.jobId);
     if (!job) { slot.jobId = null; continue; }
-    slot.progressSec += dt * speed * oficinaMult(p);
+    slot.progressSec += dt * speed * oficinaMult(p) * (1 + gs.speed / 100);
     while (slot.progressSec >= job.durationSec && !isJailed(p, t)) {
       slot.progressSec -= job.durationSec;
       const mm = robberyModeMult(slot, t); // golpe fraco, normal ou com bônus
       const night = isNight(t);
-      const cash = Math.round(roll(p, job.cash) * cm * mm * arsenalMult(p) * (night ? NIGHT.cashMult : 1) * (1 + territoryBonus(p, job.district, t)));
-      const xp = Math.max(1, Math.round(job.xp * xm * mm));
+      const gearCash = 1 + (gs.cash + (job.maxStars >= 4 ? gs.intimidate : 0)) / 100;
+      const nightPerk = night && gear.perks.includes('dono_da_noite') ? 1.25 : 1;
+      const cash = Math.round(roll(p, job.cash) * cm * mm * arsenalMult(p) * (night ? NIGHT.cashMult : 1) * (1 + territoryBonus(p, job.district, t)) * gearCash * nightPerk);
+      const xp = Math.max(1, Math.round(job.xp * xm * mm * (1 + gs.xp / 100)));
       // golpe grande rende grana suja: precisa passar pelos negócios antes de gastar
       const dirty = job.maxStars >= LAUNDER.dirtyFromStars;
       if (dirty) { p.dirtyCash += cash; p.stats.cashEarned += cash; } else earn(p, cash);
@@ -445,8 +496,10 @@ function step(p: PlayerState, t: number, dt: number, events: GameEvent[]) {
       p.stats.robberiesDone += 1;
       p.stats.jobCounts[job.id] = (p.stats.jobCounts[job.id] ?? 0) + 1;
       events.push({ type: 'robbery_done', jobId: job.id, cash, xp, ...(dirty ? { dirty: true } : {}) });
+      // desgaste do equipamento em uso
+      for (const g of equippedGear(p)) g.wear = Math.min(100, (g.wear ?? 0) + GEAR.wearPerRobbery);
       rollDrops(p, job, mm, t, events);
-      addHeat(p, job.heat * (night ? NIGHT.heatMult : 1), t, events, job.maxStars);
+      addHeat(p, job.heat * (night ? NIGHT.heatMult : 1) * (1 - gs.stealth / 100), t, events, job.maxStars);
       if (slot.once) { slot.jobId = null; slot.once = undefined; slot.progressSec = 0; break; }
     }
     if (isJailed(p, t)) slot.progressSec = 0;
@@ -454,7 +507,7 @@ function step(p: PlayerState, t: number, dt: number, events: GameEvent[]) {
   if (isJailed(p, t)) return;
 
   // 3) Laboratório: consome 1 lote de insumo e entrega produto quando o timer fecha.
-  const labSpeed = speed * (1 + RULES.labSpeedPerLevel * p.lab.level);
+  const labSpeed = speed * (1 + RULES.labSpeedPerLevel * p.lab.level) * (1 + gs.chem / 100);
   for (const line of p.lab.lines) {
     if (!line.drugId) continue;
     const drug = drugById.get(line.drugId)!;
@@ -484,7 +537,7 @@ function step(p: PlayerState, t: number, dt: number, events: GameEvent[]) {
     if (units > 0) {
       p.dealing.sellProgress -= units;
       p.product[sellId] -= units;
-      const cash = units * drug.basePrice * district.streetPriceMult * cm;
+      const cash = units * drug.basePrice * district.streetPriceMult * cm * (1 + gs.dealer / 100);
       earn(p, cash);
       gainXp(p, units * Math.ceil(drug.basePrice / 10) * xm, events);
       p.stats.unitsSold += units;
