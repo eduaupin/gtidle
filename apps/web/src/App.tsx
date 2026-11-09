@@ -30,9 +30,9 @@ import { consumeLoginHash } from './auth';
 
 type Tab = 'assaltos' | 'inventario' | 'lab' | 'imoveis' | 'gangue' | 'visual' | 'base' | 'bonde' | 'cidade' | 'mercado' | 'loja' | 'chat';
 const TABS: [Tab, string, string?][] = [
-  ['assaltos', 'Assaltos', 'i_car'], ['inventario', 'Inventário', 'i_badge'], ['lab', 'Galpão', 'i_lab'], ['imoveis', 'Imóveis', 'i_trophy'], ['gangue', 'Gangue', 'i_badge'],
-  ['visual', 'Visual', 'i_crown'], ['base', 'Base', 'i_house'], ['bonde', 'Bonde'], ['cidade', 'Cidade'],
-  ['mercado', 'Mercado', 'i_gem_badge'], ['loja', 'Loja', 'i_diamond'], ['chat', 'Chat'],
+  ['assaltos', 'Assaltos', 'i_car'], ['inventario', 'Inventário', 'i_shield'], ['lab', 'Galpão', 'i_lab'], ['imoveis', 'Imóveis', 'i_trophy'], ['gangue', 'Gangue', 'i_badge'],
+  ['visual', 'Visual', 'i_crown'], ['base', 'Base', 'i_house'], ['bonde', 'Bonde', 'i_skull'], ['cidade', 'Cidade', 'i_glass'],
+  ['mercado', 'Mercado', 'i_gem_badge'], ['loja', 'Loja', 'i_diamond'], ['chat', 'Chat', 'i_heart'],
 ];
 
 interface LogLine { id: number; at: number; text: string; kind: 'good' | 'bad' | 'info' }
@@ -317,7 +317,7 @@ export default function App() {
             <nav className="tabs" aria-label="Seções">
               {TABS.map(([id, label, icon]) => (
                 <button key={id} className={tab === id ? 'tab on' : 'tab'} onClick={() => setTab(id)} aria-current={tab === id}>
-                  {icon && <Icon name={icon} size={1.15} />}{label}{missionTab === id && tab !== id && <span className="dot" aria-label="objetivo aqui" />}
+                  <Icon name={icon ?? 'i_star'} size={1.15} /><span className="tab-label">{label}</span>{missionTab === id && tab !== id && <span className="dot" aria-label="objetivo aqui" />}
                 </button>
               ))}
             </nav>
