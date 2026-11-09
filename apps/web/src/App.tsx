@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  BRAND, DIAMOND_ITEMS, DRUGS, HEIST_PLANS, PARTS, RARE_ITEMS, ROBBERIES, RULES, currentMission, formatCash, isLookBurned, missionDone,
+  BRAND, DIAMOND_ITEMS, DRUGS, HEIST_PLANS, PARTS, RARE_ITEMS, ROBBERIES, RULES, currentMission, formatCash, isLookBurned, missionDone, speciesById,
   type Action, type Currency, type GameEvent, type PlayerState, type RealMoneyProduct,
 } from '@gti/shared';
 import { api, ApiError, clearToken, getToken, initialCurrency, saveCurrency } from './api';
@@ -23,15 +23,20 @@ import MarketPanel from './ui/Market';
 import Icon from './ui/Icon';
 import CrewPanel from './ui/Crew';
 import InventoryPanel from './ui/Inventory';
+import RecruitsPanel from './ui/Recruits';
+import ArenaPanel from './ui/Arena';
+import { EncounterPopup, StarterPicker } from './ui/Encounter';
 import CityPanel from './ui/CityTab';
 import { PhotoModal, ProfileModal } from './ui/Social';
 import { AccountModal, LoginButtons, RESULT_TEXT } from './ui/Account';
 import { consumeLoginHash } from './auth';
 import Tutorial from './ui/Tutorial';
+import { LANGS, lang, setLang, t } from './i18n';
 
-type Tab = 'assaltos' | 'inventario' | 'lab' | 'imoveis' | 'gangue' | 'visual' | 'base' | 'bonde' | 'cidade' | 'mercado' | 'loja' | 'chat';
+type Tab = 'assaltos' | 'capangas' | 'arena' | 'inventario' | 'lab' | 'imoveis' | 'gangue' | 'visual' | 'base' | 'bonde' | 'cidade' | 'mercado' | 'loja' | 'chat';
 const TABS: [Tab, string, string?][] = [
-  ['assaltos', 'Assaltos', 'i_car'], ['inventario', 'Inventário', 'i_shield'], ['lab', 'Galpão', 'i_lab'], ['imoveis', 'Imóveis', 'i_trophy'], ['gangue', 'Gangue', 'i_badge'],
+  ['assaltos', 'Assaltos', 'i_car'], ['capangas', 'Capangas', 'i_star'], ['inventario', 'Inventário', 'i_shield'], ['arena', 'Arena', 'i_vip'],
+  ['lab', 'Galpão', 'i_lab'], ['imoveis', 'Imóveis', 'i_cash'], ['gangue', 'Gangue', 'i_badge'],
   ['visual', 'Visual', 'i_crown'], ['base', 'Base', 'i_house'], ['bonde', 'Bonde', 'i_skull'], ['cidade', 'Cidade', 'i_glass'],
   ['mercado', 'Mercado', 'i_gem_badge'], ['loja', 'Loja', 'i_diamond'], ['chat', 'Chat', 'i_heart'],
 ];
@@ -58,6 +63,12 @@ function describe(events: GameEvent[]): Omit<LogLine, 'id' | 'at'>[] {
   for (const e of events) {
     if (e.type === 'level_up') out.push({ kind: 'info', text: `Você subiu para o nível ${e.level}` });
     if (e.type === 'downed') out.push({ kind: 'bad', text: e.reason === 'morto' ? 'A gangue foi derrubada e voltou para o esconderijo. Não farma até você mandar de volta (aba Inventário).' : 'Kits médicos acabaram com a vida baixa: a gangue recuou para o esconderijo (aba Inventário).' });
+    if (e.type === 'recruited') out.push({ kind: 'good', text: `${e.lenda ? 'LENDA DA RUA! ' : ''}${speciesById(e.speciesId)?.name ?? 'Capanga'} (nv ${e.level}) entrou para a gangue${e.auto ? ' (convite automático)' : ''}` });
+    if (e.type === 'recruit_failed') out.push({ kind: 'info', text: `${speciesById(e.speciesId)?.name ?? 'Ele'} recusou o convite` });
+    if (e.type === 'promoted') out.push({ kind: 'good', text: `Promoção: ${e.from} virou ${e.to}` });
+    if (e.type === 'recruit_level') out.push({ kind: 'info', text: `${e.name} chegou ao nível ${e.level}` });
+    if (e.type === 'boss_result') out.push({ kind: e.won ? 'good' : 'bad', text: e.won ? `Chefão derrubado: ${HEIST_PLANS.find(h => h.id === e.bossId)?.name}` : `O chefão venceu: seu time precisa de mais força (${HEIST_PLANS.find(h => h.id === e.bossId)?.name})` });
+    if (e.type === 'disc') out.push({ kind: 'good', text: 'Caiu um disco de treino (aba Capangas)' });
     if (e.type === 'revived') out.push({ kind: 'good', text: `Clube Rockeiro: a gangue caiu, levantou e voltou a farmar (${e.left} reanimações hoje)` });
     if (e.type === 'kit_used') out.push({ kind: 'info', text: `Kit médico usado: vida ${e.hp}` });
     if (e.type === 'supply_bought') out.push({ kind: 'info', text: `Mercador: ${e.qty} ${e.item === 'ammo' ? 'balas' : 'kits'} por ${formatCash(e.cost)}` });
@@ -262,17 +273,18 @@ export default function App() {
   if (needsLogin) {
     return (
       <main className="login">
-        <h1>{BRAND.name}<span>{BRAND.tagline}</span></h1>
-        <p>Comece com $50 na Periferia, monte sua gangue e atravesse a cidade até as Mansões. Ela trabalha até quando você fecha o jogo.</p>
+        <h1>{BRAND.name}<span>{t(BRAND.tagline)}</span></h1>
+        <p>{t('Comece com $50 na Periferia, monte sua gangue e atravesse a cidade até as Mansões. Ela trabalha até quando você fecha o jogo.')}</p>
+        <div className="lang-switch" role="group" aria-label="Idioma">{LANGS.map(([id, label]) => <button key={id} className={lang === id ? 'chip active' : 'chip'} onClick={() => setLang(id)}>{label}</button>)}</div>
         {ref && <p className="invite-note">Você chegou por convite ({ref}): entra com bônus de grana e diamantes.</p>}
         <LoginButtons nick={nick} refCode={ref} onDone={() => { try { localStorage.removeItem('gti_ref'); } catch { /* ok */ } setNeedsLogin(false); }} />
         {loginErr && <p className="msg bad">{loginErr}</p>}
-        <p className="small muted or">ou jogue como convidado (dá para ligar a conta depois)</p>
+        <p className="small muted or">{t('ou jogue como convidado (dá para ligar a conta depois)')}</p>
         <form onSubmit={async e => { e.preventDefault(); await api.guest(nick, ref); try { localStorage.removeItem('gti_ref'); } catch { /* ok */ } setNeedsLogin(false); }}>
-          <input autoFocus value={nick} maxLength={16} onChange={e => setNick(e.target.value)} placeholder="Seu apelido" aria-label="Seu apelido, de 3 a 16 letras" />
-          <button disabled={nick.trim().length < 3}>Entrar</button>
+          <input autoFocus value={nick} maxLength={16} onChange={e => setNick(e.target.value)} placeholder={t('Seu apelido')} aria-label="Seu apelido, de 3 a 16 letras" />
+          <button disabled={nick.trim().length < 3}>{t('Entrar')}</button>
         </form>
-        <p className="small">Para maiores de 18 anos.</p>
+        <p className="small">{t('Para maiores de 18 anos.')}</p>
         {profileCode && <ProfileModal code={profileCode} onClose={() => setProfileCode(null)} />}
       </main>
     );
@@ -293,6 +305,7 @@ export default function App() {
           <CityCanvas player={player} fetchedAt={fetchedAt}
             onSelectJob={id => { setSelectedJob(id); setTab('assaltos'); }}>
             <Diary lines={log} />
+            <EncounterPopup p={player} act={act} />
             <div className="map-top">
               <AlertCard p={player} onState={apply} onVip={() => act({ type: 'resolveAlertVip' })} onShop={() => setTab('loja')} />
               <LookBurnCard p={player} act={act} onLook={() => setTab('visual')} />
@@ -303,6 +316,7 @@ export default function App() {
                   {([
                     ['+$100.000', api.devCash, true],
                     ['+$50.000 sujo', api.devDirty, true],
+                    ['Encontro', api.devEncounter, true],
                     ['+ itens de mercado', api.devLoot, true],
                     ['Nível 90', api.devLevel, player.level < 90],
                     ['Testar alerta', api.devAlert, !player.alert],
@@ -329,7 +343,7 @@ export default function App() {
             <nav className="tabs" aria-label="Seções" data-tour="tabs">
               {TABS.map(([id, label, icon]) => (
                 <button key={id} className={tab === id ? 'tab on' : 'tab'} onClick={() => setTab(id)} aria-current={tab === id}>
-                  <Icon name={icon ?? 'i_star'} size={1.15} /><span className="tab-label">{label}</span>{missionTab === id && tab !== id && <span className="dot" aria-label="objetivo aqui" />}
+                  <Icon name={icon ?? 'i_star'} size={1.15} /><span className="tab-label">{t(label)}</span>{missionTab === id && tab !== id && <span className="dot" aria-label="objetivo aqui" />}
                 </button>
               ))}
             </nav>
@@ -342,6 +356,8 @@ export default function App() {
             {tab === 'gangue' && <GangPanel p={player} act={act} onShare={() => setSharing(true)} />}
           {tab === 'visual' && <LookPanel p={player} act={act} />}
           {tab === 'base' && <BasePanel p={player} act={act} />}
+            {tab === 'capangas' && <RecruitsPanel p={player} act={act} onState={apply} />}
+            {tab === 'arena' && <ArenaPanel p={player} onState={apply} />}
             {tab === 'inventario' && <InventoryPanel p={player} act={act} onState={apply} onGoMarket={() => setTab('mercado')} />}
             {tab === 'bonde' && <CrewPanel p={player} onState={apply} />}
             {tab === 'cidade' && <CityPanel p={player} onState={apply} onProfile={setProfileCode} />}
@@ -350,6 +366,7 @@ export default function App() {
         </div>
       </div>
       {toast && <div className="toasts" role="alert"><div className="toast bad">{toast}</div></div>}
+      {!showIntro && tour === null && player.recruits && !player.recruits.starterPicked && <StarterPicker act={act} />}
       {showIntro && <Intro onClose={closeIntro} onTour={() => { setShowIntro(false); setTour(0); }} />}
       {tour !== null && <Tutorial step={tour} onStep={setTour} onTab={tourTab} onClose={closeTour} />}
       {sharing && <ShareModal p={player} onClose={() => setSharing(false)} />}

@@ -4,7 +4,9 @@ import {
   DECOR_ITEMS, DEFAULT_PLACED, DIAMOND_ITEMS, DISTRICTS, DROP_RULES, HEIST_PLANS, PARTS, RARE_ITEMS, emptyInventory, ownsItem, DRUGS, PROPERTIES, ROBBERIES, RULES, STARTER_DECOR, STARTER_ITEMS,
   arsenalMult, equipamentoHeatMult, heatCapFor, starsFor, INSURANCE, LAUNDER, NIGHT, isNight, isLookBurned, oficinaMult,
   cashMult, isJailed, isTurbo, isVip, labLines, lawyerCost, nextRandom, offlineCapMs, robberyModeMult, xpMult, xpToNext,
-  GEAR, MELEE, SUPPLY, VIP_SUPPLY, bagMaxFor, bulletPrice, isMelee, jobNeeds, kitPrice, brDay, equippedGear, gearSummary, numberedRarity, rollBase, rollRarity, rollStats,
+  GEAR, MELEE, SUPPLY, VIP_SUPPLY, bagMaxFor,
+  RECRUIT, INVITES, STARTERS, eventBonus, isBoss, recruitChance, recruitXpToNext, rollEncounter, speciesById, teamEffect, teamPower,
+  type InviteId, type Recruit, type Spec, bulletPrice, isMelee, jobNeeds, kitPrice, brDay, equippedGear, gearSummary, numberedRarity, rollBase, rollRarity, rollStats,
   type DrugId, type GameEvent, type PlayerState, type RobberyJob, type RobberyMode,
 } from '@gti/shared';
 
@@ -33,6 +35,17 @@ export function setAfterAdvance(fn: ((p: PlayerState, events: GameEvent[], now: 
 
 /** Arma inicial: presa à conta, não vende por dinheiro real nem no mercado */
 export const STARTER_WEAPON = { uid: 'inicial-revolver', itemId: 'arma_revolver', serial: 0, rarity: 'comum' as const, stats: { aim: 3 }, wear: 0, bound: true };
+
+export const emptyRecruits = (): PlayerState['recruits'] => ({
+  team: [], depot: [], album: {}, trainee: null, pvpTeam: [],
+  invites: { simples: 5, bom: 0, otimo: 0 },
+  auto: { on: false, invite: 'simples', minRarity: 'comum', onlyNew: false },
+  encounter: null, starterPicked: false, discs: {}, autoBoss: false,
+});
+
+// Pontos dominados (ginásios): o servidor diz quais especialidades este jogador domina
+let pointSpecs: (p: PlayerState) => Spec[] = () => [];
+export function setPointSpecs(fn: (p: PlayerState) => Spec[]) { pointSpecs = fn; }
 
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 export const makeCode = (n = 6) => Array.from({ length: n }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join('');
@@ -76,6 +89,8 @@ export function newPlayer(id: string, nick: string, now: number): PlayerState {
     race: { day: '', runs: 0 },
     gearOn: { weapon: STARTER_WEAPON.uid },
     vitals: { hp: SUPPLY.maxHp, ammo: 150, kits: 3, down: null, autoBuy: false },
+    recruits: emptyRecruits(),
+    pvp: { rating: 1000, wins: 0, losses: 0, season: '', lastAt: 0, best: 1000 },
     rmt: { pending: [], available: 0, sold: 0, bought: 0 },
     rngSeed: Math.floor(Math.random() * 2 ** 31),
   };
@@ -115,6 +130,14 @@ export function migrate(p: PlayerState): PlayerState {
   p.race ??= { day: '', runs: 0 };
   p.gearOn ??= {};
   p.rmt ??= { pending: [], available: 0, sold: 0, bought: 0 };
+  p.recruits ??= emptyRecruits();
+  p.recruits.discs ??= {};
+  p.recruits.autoBoss ??= false;
+  p.pvp ??= { rating: 1000, wins: 0, losses: 0, season: '', lastAt: 0, best: 1000 };
+  // time só com quem está no depósito
+  p.recruits.team = p.recruits.team.filter(uid => p.recruits.depot.some(r => r.uid === uid)).slice(0, RECRUIT.teamSize);
+  p.recruits.pvpTeam = p.recruits.pvpTeam.filter(uid => p.recruits.depot.some(r => r.uid === uid)).slice(0, RECRUIT.teamSize);
+  if (p.recruits.trainee && !p.recruits.depot.some(r => r.uid === p.recruits.trainee)) p.recruits.trainee = null;
   if (!p.vitals) {
     // jogador de antes da vida/munição: ganha o kit inicial e um revólver se não tiver arma com status
     p.vitals = { hp: SUPPLY.maxHp, ammo: 150, kits: 3, down: null, autoBuy: false };
@@ -357,14 +380,15 @@ export function giveRare(p: PlayerState, t: number, events: GameEvent[]) {
 }
 
 /** Entrega um equipamento com status sorteados. `stars` define a raridade; mochila cheia vira peças. */
-export function giveGear(p: PlayerState, stars: number, t: number, events: GameEvent[]) {
+export function giveGear(p: PlayerState, stars: number, t: number, events: GameEvent[], minRarity?: 'raro' | 'epico' | 'lendario') {
   if (p.inventory.rares.length >= bagMaxFor(isVip(p, t))) {
     const part = PARTS[Math.floor(rnd(p) * PARTS.length)];
     p.inventory.parts[part.id] += 2;
     events.push({ type: 'drop', kind: 'part', id: part.id, qty: 2 });
     return;
   }
-  const rarity = rollRarity(stars, () => rnd(p));
+  let rarity = rollRarity(stars, () => rnd(p));
+  if (minRarity && RAR_RANK[rarity] < RAR_RANK[minRarity]) rarity = minRarity;
   const base = rollBase(rarity, () => rnd(p));
   const uid = `${base.id}-${Math.floor(t).toString(36)}${Math.floor(rnd(p) * 1e6).toString(36)}`;
   p.inventory.rares.push({ uid, itemId: base.id, serial: 0, ...rollStats(base, rarity, () => rnd(p)) });
@@ -404,7 +428,7 @@ function rollDrops(p: PlayerState, job: RobberyJob & { rareChance?: number }, mo
   if (job.maxStars >= 3 && !planIds.has(job.id)) {
     const plans = count(p, DROP_RULES.plansPerHourPerStar * (job.maxStars - 2) * hours);
     if (plans > 0) {
-      const pool = HEIST_PLANS.filter(h => job.maxStars >= 6 || h.maxStars <= job.maxStars);
+      const pool = HEIST_PLANS.filter(h => (job.maxStars >= 6 || h.maxStars <= job.maxStars) && (!isBoss(h) || (job.maxStars >= 6 && h.minLevel <= job.minLevel + 15)));
       const plan = pool[Math.floor(rnd(p) * pool.length)] ?? HEIST_PLANS[0];
       p.inventory.plans[plan.id] = (p.inventory.plans[plan.id] ?? 0) + plans;
       events.push({ type: 'drop', kind: 'plan', id: plan.id, qty: plans });
@@ -471,6 +495,67 @@ export function buySupplyRaw(p: PlayerState, item: 'ammo' | 'kit', qty: number, 
   return n;
 }
 
+// ---------------- capangas ----------------
+export function addRecruit(p: PlayerState, r: Omit<Recruit, 'uid' | 'xp' | 'caughtAt'>, t: number) {
+  const rec: Recruit = { ...r, uid: `cap-${Math.floor(t).toString(36)}${Math.floor(rnd(p) * 1e6).toString(36)}`, xp: 0, caughtAt: t };
+  p.recruits.depot.push(rec);
+  const a = (p.recruits.album[r.speciesId] ??= { seen: 0, caught: 0 });
+  a.caught += 1; a.seen = Math.max(a.seen, a.caught);
+  if (p.recruits.team.length < RECRUIT.teamSize) p.recruits.team.push(rec.uid);
+  return rec;
+}
+
+/** Joga um convite no encontro aberto. Erra = convite gasto, o encontro continua até a janela fechar. */
+export function tryRecruit(p: PlayerState, invite: InviteId, t: number, events: GameEvent[], auto = false) {
+  const enc = p.recruits.encounter;
+  if (!enc || enc.expiresAt < t) return 'none' as const;
+  if ((p.recruits.invites[invite] ?? 0) <= 0) return 'no_invite' as const;
+  const s = speciesById(enc.speciesId)!;
+  p.recruits.invites[invite] -= 1;
+  if (rnd(p) < recruitChance(s, invite, enc.lenda)) {
+    addRecruit(p, { speciesId: s.id, level: enc.level, ivs: enc.ivs, ...(enc.lenda ? { lenda: true } : {}) }, t);
+    p.recruits.encounter = null;
+    p.stats.recruited = (p.stats.recruited ?? 0) + 1;
+    events.push({ type: 'recruited', speciesId: s.id, level: enc.level, lenda: enc.lenda, auto });
+    return 'ok' as const;
+  }
+  events.push({ type: 'recruit_failed', speciesId: s.id });
+  return 'fail' as const;
+}
+
+const RAR_RANK: Record<string, number> = { comum: 0, raro: 1, epico: 2, lendario: 3 };
+/** Recrutamento automático (para quem está AFK): tenta com o convite escolhido até acertar ou acabar a janela */
+function autoRecruit(p: PlayerState, t: number, events: GameEvent[]) {
+  const a = p.recruits.auto, enc = p.recruits.encounter;
+  if (!a.on || !enc) return;
+  const s = speciesById(enc.speciesId)!;
+  if (!enc.lenda && RAR_RANK[s.rarity] < RAR_RANK[a.minRarity]) return;
+  if (a.onlyNew && !enc.lenda && (p.recruits.album[s.id]?.caught ?? 0) > 0) return;
+  for (let i = 0; i < 3; i++) {
+    const r = tryRecruit(p, a.invite, t, events, true);
+    if (r !== 'fail') break;
+  }
+}
+
+/** XP para um capanga: sobe de nível e promove (evolui) no nível certo */
+function recruitXp(p: PlayerState, r: Recruit, xp: number, events: GameEvent[]) {
+  if (r.level >= RECRUIT.maxLevel) return;
+  r.xp += xp;
+  while (r.level < RECRUIT.maxLevel && r.xp >= recruitXpToNext(r.level)) {
+    r.xp -= recruitXpToNext(r.level);
+    r.level += 1;
+    const s = speciesById(r.speciesId)!;
+    if (r.level % 10 === 0) events.push({ type: 'recruit_level', name: s.name, level: r.level });
+    if (s.evolvesTo && s.evolveLevel && r.level >= s.evolveLevel) {
+      const to = speciesById(s.evolvesTo)!;
+      r.speciesId = to.id;
+      const a = (p.recruits.album[to.id] ??= { seen: 0, caught: 0 });
+      a.seen += 1; a.caught += 1;
+      events.push({ type: 'promoted', from: s.name, to: to.name });
+    }
+  }
+}
+
 /** Clube Rockeiro: a gangue levanta sozinha (algumas vezes por dia) e continua farmando AFK */
 function tryRevive(p: PlayerState, t: number, events: GameEvent[]) {
   if (!isVip(p, t)) return false;
@@ -516,6 +601,7 @@ function step(p: PlayerState, t: number, dt: number, events: GameEvent[]) {
     events.push({ type: 'released' });
   }
   const jailed = isJailed(p, t);
+  if (p.recruits.encounter && p.recruits.encounter.expiresAt < t) p.recruits.encounter = null;
   const speed = isTurbo(p, t) ? RULES.turboSpeedMult : 1;
   const cm = cashMult(p, t), xm = xpMult(p, t);
   const gear = gearSummary(p), gs = gear.stats;
@@ -554,11 +640,14 @@ function step(p: PlayerState, t: number, dt: number, events: GameEvent[]) {
   const weapon = p.equipped.weapon ? DIAMOND_ITEMS.find(i => i.id === p.equipped.weapon) : undefined;
   const melee = isMelee(weapon?.weapon?.kind);
   const veh = gear.vehicle;
+  const ev = eventBonus(t);
+  const points = pointSpecs(p);
   for (const slot of p.robberies) {
     if (!slot.jobId || lookBurned || p.vitals.down) continue; // visual queimado ou gangue recolhida: ninguém sai
     const job = robberyById.get(slot.jobId);
     if (!job) { slot.jobId = null; continue; }
-    slot.progressSec += dt * speed * oficinaMult(p) * (1 + gs.speed / 100) * (1 + veh.speed / 100);
+    const team = teamEffect(p, job, points); // o time de capangas pesa no ritmo, na grana e no dano
+    slot.progressSec += dt * speed * oficinaMult(p) * (1 + gs.speed / 100) * (1 + veh.speed / 100) * team.speed;
     while (slot.progressSec >= job.durationSec && !isJailed(p, t) && !p.vitals.down) {
       slot.progressSec -= job.durationSec;
       const mm = robberyModeMult(slot, t); // golpe fraco, normal ou com bônus
@@ -575,7 +664,15 @@ function step(p: PlayerState, t: number, dt: number, events: GameEvent[]) {
         }
       }
       const success = armed || rnd(p) < SUPPLY.unarmedSuccess;
-      applyDamage(p, need.damage, t, events);
+      applyDamage(p, need.damage * team.damage, t, events);
+      // chefão: o time precisa ter força para vencer
+      const bossLost = success && isBoss(job) && teamPower(p, job, points) < job.boss.power;
+      if (bossLost) {
+        events.push({ type: 'boss_result', bossId: job.id, won: false });
+        addHeat(p, job.heat * 0.5, t, events, job.maxStars);
+        if (slot.once) { slot.jobId = null; slot.once = undefined; slot.progressSec = 0; break; }
+        continue;
+      }
       if (!success) {
         events.push({ type: 'robbery_failed', jobId: job.id, reason: 'sem_bala' });
         addHeat(p, job.heat * 0.5, t, events, job.maxStars);
@@ -584,8 +681,8 @@ function step(p: PlayerState, t: number, dt: number, events: GameEvent[]) {
       }
       const gearCash = 1 + (gs.cash + (job.maxStars >= 4 ? gs.intimidate : 0)) / 100;
       const nightPerk = night && gear.perks.includes('dono_da_noite') ? 1.25 : 1;
-      const cash = Math.round(roll(p, job.cash) * cm * mm * arsenalMult(p) * (night ? NIGHT.cashMult : 1) * (1 + territoryBonus(p, job.district, t)) * gearCash * nightPerk * (1 + veh.cash / 100) * meleeMult);
-      const xp = Math.max(1, Math.round(job.xp * xm * mm * (1 + gs.xp / 100)));
+      const cash = Math.round(roll(p, job.cash) * cm * mm * arsenalMult(p) * (night ? NIGHT.cashMult : 1) * (1 + territoryBonus(p, job.district, t)) * gearCash * nightPerk * (1 + veh.cash / 100) * meleeMult * team.cash * (1 + ev.cash));
+      const xp = Math.max(1, Math.round(job.xp * xm * mm * (1 + gs.xp / 100) * (1 + ev.xp)));
       // golpe grande rende grana suja: precisa passar pelos negócios antes de gastar
       const dirty = job.maxStars >= LAUNDER.dirtyFromStars;
       if (dirty) { p.dirtyCash += cash; p.stats.cashEarned += cash; } else earn(p, cash);
@@ -596,7 +693,36 @@ function step(p: PlayerState, t: number, dt: number, events: GameEvent[]) {
       events.push({ type: 'robbery_done', jobId: job.id, cash, xp, ...(dirty ? { dirty: true } : {}) });
       // desgaste do equipamento em uso
       for (const g of equippedGear(p)) g.wear = Math.min(100, (g.wear ?? 0) + GEAR.wearPerRobbery);
-      rollDrops(p, job, mm, t, events);
+      rollDrops(p, job, mm * (1 + ev.drop), t, events);
+      // capangas ganham XP (o do esconderijo também, com uma parte)
+      for (const r of p.recruits.team.map(uid => p.recruits.depot.find(x => x.uid === uid)).filter((x): x is Recruit => !!x)) recruitXp(p, r, xp * RECRUIT.teamXpShare, events);
+      const trainee = p.recruits.trainee && !p.recruits.team.includes(p.recruits.trainee) ? p.recruits.depot.find(x => x.uid === p.recruits.trainee) : undefined;
+      if (trainee) recruitXp(p, trainee, xp * RECRUIT.traineeShare * (isVip(p, t) ? 2 : 1), events);
+      // encontro: alguém quer entrar para a gangue (janela de 30 s)
+      if (!isBoss(job) && rnd(p) < RECRUIT.encountersPerHour * (job.durationSec / 3600) * (1 + ev.drop)) {
+        const enc = rollEncounter(job.minLevel, () => rnd(p), t, job.district);
+        p.recruits.encounter = enc;
+        const a = (p.recruits.album[enc.speciesId] ??= { seen: 0, caught: 0 });
+        a.seen += 1;
+        events.push({ type: 'encounter', speciesId: enc.speciesId, level: enc.level, lenda: enc.lenda });
+        autoRecruit(p, t, events);
+      }
+      if (isBoss(job)) {
+        events.push({ type: 'boss_result', bossId: job.id, won: true });
+        giveGear(p, 6, t, events, 'epico');
+        if (rnd(p) < 0.3) {
+          const stat = (['hp', 'atk', 'def', 'spd'] as const)[Math.floor(rnd(p) * 4)];
+          p.recruits.discs[stat] = (p.recruits.discs[stat] ?? 0) + 1;
+          events.push({ type: 'disc', stat });
+        }
+        // repete sozinho enquanto tiver ficha
+        if (slot.once && p.recruits.autoBoss && (p.inventory.plans[job.id] ?? 0) > 0) {
+          p.inventory.plans[job.id] -= 1;
+          slot.progressSec = 0;
+          addHeat(p, job.heat * (night ? NIGHT.heatMult : 1) * (1 - gs.stealth / 100), t, events, job.maxStars);
+          continue;
+        }
+      }
       addHeat(p, job.heat * (night ? NIGHT.heatMult : 1) * (1 - gs.stealth / 100), t, events, job.maxStars);
       if (slot.once) { slot.jobId = null; slot.once = undefined; slot.progressSec = 0; break; }
     }

@@ -304,6 +304,37 @@ a mesma taxa do mercado.
 **Para testar em desenvolvimento:** botão "+$50.000 sujo" para a lavanderia; o leilão abre qualquer dia;
 use janelas anônimas com nicks diferentes para bonde, equipe, presentes e lances.
 
+## Capangas, chefões, arena e eventos (a mecânica de coleção)
+
+Regras em `packages/shared/src/content/recruits.ts` e `endgame.ts`; arena no servidor em `apps/server/src/arena.ts`.
+
+- **Capangas** (o que seria a criatura do jogo de coleção): 30 espécies em 6 especialidades (Pistoleiro,
+  Brutamonte, Arrombador, Hacker, Golpista, Motorista) com roda de vantagem (+25% contra a seguinte). Nível 1 a
+  100, atributos individuais 0 a 31, potência P1 a P5, promoção (evolução) em 3 estágios e a **Lenda da Rua**
+  (1 em 24.000 encontros, anunciada no Jornal). O jogador escolhe 1 de 3 iniciais.
+- **Recrutamento:** depois de um assalto às vezes aparece alguém. Janela de **30 s** para mandar um convite
+  (simples, bom, ótimo; Mercador, só grana do jogo). Recrutamento automático com filtro de raridade e "só quem
+  falta no álbum". Time de 5, depósito sem limite, **álbum** com vistos e recrutados.
+- **Time nos assaltos:** força do time contra o que o alvo pede muda velocidade (0,8x a 1,5x), grana e dano;
+  especialidade certa no alvo certo rende +25%. Capangas sobem de nível com o XP dos assaltos.
+- **Esconderijo:** um capanga fora do time treina com 25% do XP (50% no Clube).
+- **Discos de treino:** caem dos chefões; +10% num atributo, até 2 por capanga.
+- **Mercado:** capanga a partir do nível 50 e P3 (Lenda e P5 em qualquer nível); o inicial nunca.
+- **Análise do golpe:** em cada alvo, grana/XP/lucro/balas/kits/equipamentos/encontros por hora com os bônus atuais.
+- **Fora da Lei:** 12 golpes do nível 90 ao 150.
+- **Chefões:** 10, cada ficha é uma tentativa (caem em golpes de 6★ e se vendem no Mercado); o time precisa ter
+  força; vencer garante equipamento épico ou melhor e pode soltar disco. Repetição automática enquanto tiver ficha.
+- **Pontos da cidade** (ginásios): 6, um por especialidade, a partir do nível 60. Quem domina leva título e
+  +25% nessa especialidade.
+- **PvP ranqueado:** 1 contra 1 automático por nota (Elo), 8 ranks (os 3 de cima só para o topo), temporada
+  mensal com prêmio em diamantes ganhos.
+- **Guerra de bondes:** todo dia às 22 h UTC, o melhor capanga de cada membro (até 6); replay para todos.
+- **Replays** com linha do tempo, pausa e velocidade até 8x.
+- **Eventos globais:** Noite do Crime (quarta 19–23 h, +50% XP), Sexta da grana (+25% grana a partir das 18 h),
+  Fim de semana do drop (+50% em drops e encontros).
+- **Calçadão:** praça compartilhada com o visual de cada jogador online e balões do chat.
+- **Idiomas:** PT, EN e ES na entrada, abas, topo e tutorial (o resto ainda em português).
+
 ## Vida, munição, veículos e venda de itens (Inventário)
 
 Regras em `packages/shared/src/content/supply.ts`; venda por dinheiro real em `apps/server/src/rmt.ts`.

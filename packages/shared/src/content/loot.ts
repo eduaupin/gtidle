@@ -14,6 +14,8 @@ export const PART_FOR: Record<UpgradeTrack, PartId> = { arsenal: 'peca_arsenal',
 export const partsForTier = (tier: number) => (tier >= 4 ? (tier - 3) * 4 : 0);
 
 /** Planos de golpe: caem em golpes de 3 estrelas para cima e rodam uma vez só. */
+import { BOSSES } from './endgame';
+
 export const HEIST_PLANS: HeistPlan[] = [
   { id: 'plano_carroforte', planName: 'Plano: Carro-forte', name: 'Carro-forte na avenida', district: 'periferia', minLevel: 12,
     durationSec: 1800, cash: [15000, 25000], xp: 600, heat: 30, maxStars: 5, building: 'banco', rareChance: 0.15,
@@ -24,6 +26,8 @@ export const HEIST_PLANS: HeistPlan[] = [
   { id: 'plano_iate', planName: 'Plano: Iate do Bilionário', name: 'Iate do bilionário', district: 'marina', minLevel: 35,
     durationSec: 7200, cash: [120000, 180000], xp: 3000, heat: 45, maxStars: 6, building: 'porto', rareChance: 0.4,
     description: 'A tripulação folga no domingo.' },
+  // chefões: cada ficha é uma tentativa (content/endgame.ts)
+  ...BOSSES,
 ];
 
 export const DROP_RULES = {

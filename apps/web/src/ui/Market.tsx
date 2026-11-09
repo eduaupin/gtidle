@@ -12,21 +12,23 @@ import AuctionSection from './Auction';
 import RmtShop from './RmtShop';
 import { GearStats, RarityTag, gearName } from './Gear';
 import { gearScore } from '@gti/shared';
+import { RecruitAvatar, RecruitLine } from './RecruitBits';
 import { useNow } from './Hud';
 
-type Filter = 'tudo' | 'rare' | 'part' | 'plan';
-const FILTERS: [Filter, string][] = [['tudo', 'Tudo'], ['rare', 'Equipamentos'], ['part', 'Peças'], ['plan', 'Planos de golpe']];
+type Filter = 'tudo' | 'rare' | 'recruit' | 'part' | 'plan';
+const FILTERS: [Filter, string][] = [['tudo', 'Tudo'], ['rare', 'Equipamentos'], ['recruit', 'Capangas'], ['part', 'Peças'], ['plan', 'Planos e fichas']];
 
 const PLAN_ICON: Record<string, string> = { plano_carroforte: 'vip_black', plano_cofre: 'e_safe_big', plano_iate: 'heli_red_white' };
 const serial = (n: number, supply?: number) => (n > 0 ? `#${String(n).padStart(4, '0')}${supply ? ` de ${supply}` : ''}` : '');
 
 /** Miniatura de qualquer coisa negociável. */
 function Thumb({ kind, itemId, size = 64, rarity }: { kind: MarketListing['kind']; itemId: string; size?: number; rarity?: import('@gti/shared').Rarity }) {
+  if (kind === 'recruit') return <RecruitAvatar speciesId={itemId} size={size} />;
   if (kind === 'rare') {
     const item = DIAMOND_ITEMS.find(i => i.id === itemId);
     return item ? <ItemPreview item={item} size={size} rarity={rarity} /> : null;
   }
-  const sprite = kind === 'part' ? PARTS.find(p => p.id === itemId)?.icon : PLAN_ICON[itemId];
+  const sprite = kind === 'part' ? PARTS.find(p => p.id === itemId)?.icon : PLAN_ICON[itemId] ?? 'e_safe_big';
   return sprite ? <DecorThumb sprite={sprite} size={size} bg={kind === 'plan' ? '#3d2a10' : '#2f3a4f'} /> : null;
 }
 
@@ -170,9 +172,9 @@ export default function MarketPanel({ p, onState, onVip }: { p: PlayerState; onS
           return (
             <div key={l.id} className={`listing ${l.sellerVip ? 'hot' : ''}`}>
               {l.sellerVip && <span className="flag">Destaque</span>}
-              <Thumb kind={l.kind} itemId={l.itemId} rarity={l.rare?.rarity} />
-              <strong>{l.rare ? gearName(l.rare) : l.name}</strong>
-              {l.rare ? <><RarityTag r={l.rare.rarity} />{supply && <span className="small">{serial(l.rare.serial, supply)}</span>}<GearStats g={l.rare} compact /></> : <span className="small">{l.qty}×</span>}
+              {l.recruit ? <RecruitLine r={l.recruit} /> : <Thumb kind={l.kind} itemId={l.itemId} rarity={l.rare?.rarity} />}
+              {!l.recruit && <strong>{l.rare ? gearName(l.rare) : l.name}</strong>}
+              {l.recruit ? null : l.rare ? <><RarityTag r={l.rare.rarity} />{supply && <span className="small">{serial(l.rare.serial, supply)}</span>}<GearStats g={l.rare} compact /></> : <span className="small">{l.qty}×</span>}
               <span className="small muted">{l.sellerVip && '★ '}{l.sellerNick} · vence em {formatDuration((l.expiresAt - now) / 1000)}</span>
               {stat && <span className="small muted">Média: {Math.round(stat.avg * l.qty)} ◆</span>}
               <button className="small" disabled={busy !== null || me.balance + me.paid < l.price}

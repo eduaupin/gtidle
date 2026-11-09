@@ -1,6 +1,7 @@
 // Tutorial guiado: destaca cada parte da tela e explica o que fazer, na ordem em que o jogador vai precisar.
 // Abre sozinho depois da introdução (primeira vez) e pode ser revisto pelo "Como jogar".
 import { useEffect, useLayoutEffect, useState } from 'react';
+import { t } from '../i18n';
 
 export interface TourStep {
   /** Elemento destacado (data-tour="..."). Sem alvo, o cartão aparece no centro. */
@@ -77,10 +78,10 @@ export default function Tutorial({ step, onStep, onTab, onClose }: {
         <p>{s.text}</p>
         <div className="tour-dots" aria-hidden="true">{TOUR.map((_, i) => <span key={i} className={i === step ? 'on' : ''} />)}</div>
         <div className="row">
-          <button className="ghost small" onClick={() => onClose(false)}>Pular</button>
+          <button className="ghost small" onClick={() => onClose(false)}>{t('Pular')}</button>
           <span style={{ flex: 1 }} />
-          {step > 0 && <button className="ghost small" onClick={() => onStep(step - 1)}>Voltar</button>}
-          <button className="small" autoFocus onClick={() => (last ? onClose(true) : onStep(step + 1))}>{last ? 'Bora!' : 'Próximo'}</button>
+          {step > 0 && <button className="ghost small" onClick={() => onStep(step - 1)}>{t('Voltar')}</button>}
+          <button className="small" autoFocus onClick={() => (last ? onClose(true) : onStep(step + 1))}>{last ? t('Bora!') : t('Próximo')}</button>
         </div>
       </div>
     </div>

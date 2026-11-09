@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import Icon from './Icon';
+import { t } from '../i18n';
 import {
-  FOUNDER_DEADLINE, MAX_STARS, NIGHT, isNight, STAR_LEVELS, formatCash, starsFor, isJailed, isTurbo, isVip, lawyerCost, totalDiamonds, xpToNext, type PlayerState,
+  FOUNDER_DEADLINE, MAX_STARS, NIGHT, isNight, activeEvents, STAR_LEVELS, formatCash, starsFor, isJailed, isTurbo, isVip, lawyerCost, totalDiamonds, xpToNext, type PlayerState,
 } from '@gti/shared';
 
 export function useNow(ms = 1000) {
@@ -43,7 +44,7 @@ export default function Hud({ player: p, onLawyer, onShop, onHelp, onShare, onMa
       </div>
 
       <div className="hud-stat" data-tour="cash">
-        <small>Grana</small>
+        <small>{t('Grana')}</small>
         <strong className="cash with-icon"><Icon name="i_cash" size={1.25} />{formatCash(p.cash)}</strong>
         {p.dirtyCash >= 1 && <button className="dirty-chip" onClick={onDirty} title="Grana suja: os negócios lavam aos poucos (aba Imóveis)">+{formatCash(p.dirtyCash)} sujo</button>}
       </div>
@@ -55,6 +56,13 @@ export default function Hud({ player: p, onLawyer, onShop, onHelp, onShare, onMa
           <strong>{Math.round(p.vitals.hp)} · {Math.floor(p.vitals.ammo)} · {p.vitals.kits}</strong>
         </button>
       )}
+
+      {activeEvents(now).map(ev => (
+        <div key={ev.id} className="hud-stat hud-event-live" title={ev.text}>
+          <small>Evento</small>
+          <strong>{ev.name}</strong>
+        </div>
+      ))}
 
       {isNight(now) && (
         <div className="hud-stat hud-night" title={`Das ${NIGHT.from} h às ${NIGHT.to} h (Brasília): assaltos pagam +${Math.round((NIGHT.cashMult - 1) * 100)}% e chamam +${Math.round((NIGHT.heatMult - 1) * 100)}% de polícia`}>
@@ -86,12 +94,12 @@ export default function Hud({ player: p, onLawyer, onShop, onHelp, onShare, onMa
           <strong>{countdown(deadline, now)}</strong>
         </div>
       )}
-      <button className="help" onClick={onMap}>Mapa</button>
-      <button className="help" onClick={onShare}>Compartilhar</button>
-      <button className="help" onClick={onPhoto}>Foto</button>
-      <button className="help" onClick={onProfile}>Ficha</button>
+      <button className="help" onClick={onMap}>{t('Mapa')}</button>
+      <button className="help" onClick={onShare}>{t('Compartilhar')}</button>
+      <button className="help" onClick={onPhoto}>{t('Foto')}</button>
+      <button className="help" onClick={onProfile}>{t('Ficha')}</button>
       <button data-tour="account" className={`help ${(p.accounts ?? []).length ? '' : 'alert-dot'}`} onClick={onAccount} title={(p.accounts ?? []).length ? 'Sua conta' : 'Convidado: ligue Google ou Discord para não perder o jogo'}>Conta</button>
-      <button className="help" onClick={onHelp}>Como jogar</button>
+      <button className="help" onClick={onHelp}>{t('Como jogar')}</button>
     </header>
   );
 }

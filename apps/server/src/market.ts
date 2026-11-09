@@ -6,7 +6,7 @@
 //  - o saque em cripto existe só como regra (MARKET.withdrawEnabled = false) até ter parceiro autorizado.
 import { randomUUID } from 'node:crypto';
 import {
-  DIAMOND_ITEMS, HEIST_PLANS, MARKET, PARTS, isVip, marketFee, marketSlots, ownsItem,
+  DIAMOND_ITEMS, HEIST_PLANS, MARKET, PARTS, RECRUIT, isVip, marketFee, marketSlots, ownsItem, powerClass, speciesById,
   type PartId, type PlayerState,
 } from '@gti/shared';
 import type { Listing, Store } from './store/store';
@@ -16,12 +16,14 @@ const fail = (msg: string): never => { throw new MarketError(msg); };
 
 export type ListRequest =
   | { kind: 'rare'; uid: string; price: number }
+  | { kind: 'recruit'; uid: string; price: number }
   | { kind: 'part'; itemId: PartId; qty: number; price: number }
   | { kind: 'plan'; itemId: string; qty: number; price: number };
 
 export const itemName = (l: Pick<Listing, 'kind' | 'itemId'>) =>
   l.kind === 'part' ? PARTS.find(x => x.id === l.itemId)?.name ?? l.itemId
   : l.kind === 'plan' ? HEIST_PLANS.find(x => x.id === l.itemId)?.planName ?? l.itemId
+  : l.kind === 'recruit' ? speciesById(l.itemId)?.name ?? l.itemId
   : DIAMOND_ITEMS.find(x => x.id === l.itemId)?.name ?? l.itemId;
 
 /** Tira o raro da roupa/carro em uso se o jogador não tiver mais nenhum igual. */
@@ -36,6 +38,7 @@ function unequipIfGone(p: PlayerState, itemId: string) {
 
 function giveTo(p: PlayerState, l: Listing) {
   if (l.kind === 'rare' && l.rare) p.inventory.rares.push(l.rare);
+  else if (l.kind === 'recruit' && l.recruit) { p.recruits.depot.push(l.recruit); if (p.recruits.team.length < RECRUIT.teamSize) p.recruits.team.push(l.recruit.uid); }
   else if (l.kind === 'part') p.inventory.parts[l.itemId as PartId] += l.qty;
   else if (l.kind === 'plan') p.inventory.plans[l.itemId] = (p.inventory.plans[l.itemId] ?? 0) + l.qty;
 }
@@ -56,7 +59,21 @@ export function listItem(store: Store, p: PlayerState, req: ListRequest, now: nu
     expiresAt: now + (vip ? MARKET.durationHoursVip : MARKET.durationHoursFree) * 3600_000,
   };
   let listing: Listing;
-  if (req.kind === 'rare') {
+  if (req.kind === 'recruit') {
+    // capanga: nível 50 e potência P3 (Lenda e P5 em qualquer nível), como contrato de verdade
+    const idx = p.recruits.depot.findIndex(r => r.uid === req.uid);
+    if (idx < 0) fail('Você não tem esse capanga');
+    const r = p.recruits.depot[idx];
+    if (r.bound) fail('Seu primeiro capanga não vai para o mercado');
+    const pw = powerClass(r.ivs);
+    if (!r.lenda && pw < 5 && (r.level < RECRUIT.marketMinLevel || pw < RECRUIT.marketMinPower)) fail(`Capanga no mercado: nível ${RECRUIT.marketMinLevel} e potência P${RECRUIT.marketMinPower} (Lenda e P5 em qualquer nível)`);
+    if (p.recruits.team.length === 1 && p.recruits.team[0] === r.uid) fail('Ele é o único do time');
+    p.recruits.depot.splice(idx, 1);
+    p.recruits.team = p.recruits.team.filter(u => u !== r.uid);
+    p.recruits.pvpTeam = p.recruits.pvpTeam.filter(u => u !== r.uid);
+    if (p.recruits.trainee === r.uid) p.recruits.trainee = null;
+    listing = { ...base, kind: 'recruit', itemId: r.speciesId, qty: 1, recruit: r };
+  } else if (req.kind === 'rare') {
     const idx = p.inventory.rares.findIndex(r => r.uid === req.uid);
     if (idx < 0) fail('Você não tem esse item');
     if (p.inventory.rares[idx].bound) throw new MarketError('Item inicial: preso à conta, não dá para vender');

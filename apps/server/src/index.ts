@@ -3,10 +3,11 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { Server as SocketServer } from 'socket.io';
 import { randomUUID } from 'node:crypto';
-import { BRAND, DIAMOND_ITEMS, MARKET, REAL_MONEY_PRODUCTS, ROBBERIES, RULES, STAR_HEAT, isLookBurned, isVip, priceIn, type Action, type Currency, type PlayerState, type RealMoneyProduct } from '@gti/shared';
-import { advance, burnLook, giveGear, giveRare, migrate, newPlayer, normalizeSlots, resolveAlert, setAfterAdvance, setSerialAllocator, setTerritoryBonus } from './engine/idle';
+import { BRAND, DIAMOND_ITEMS, MARKET, rollEncounter, REAL_MONEY_PRODUCTS, ROBBERIES, RULES, STAR_HEAT, isLookBurned, isVip, priceIn, type Action, type Currency, type PlayerState, type RealMoneyProduct } from '@gti/shared';
+import { addRecruit, advance, burnLook, giveGear, giveRare, setPointSpecs, migrate, newPlayer, normalizeSlots, resolveAlert, setAfterAdvance, setSerialAllocator, setTerritoryBonus } from './engine/idle';
 import * as social from './social';
 import * as rmt from './rmt';
+import * as arena from './arena';
 import { buyListing, cancelListing, listItem, marketView, sweepExpired, type ListRequest } from './market';
 import { applyAction, applyGrant, canBuyProduct, GameError } from './engine/actions';
 import { FileStore } from './store/store';
@@ -32,6 +33,7 @@ setSerialAllocator((itemId, supply) => store.nextSerial(itemId, supply));
 // cidade viva: bônus de território e o que acontece depois de cada avanço (pontos, jornal, convites)
 setTerritoryBonus(social.territoryBonusFor(store));
 setAfterAdvance(social.onAdvance(store));
+setPointSpecs(arena.pointSpecsFor(store));
 
 const app = Fastify({ logger: { level: DEV ? 'info' : 'warn' } });
 await app.register(cors, { origin: process.env.CORS_ORIGIN?.split(',') ?? true });
@@ -79,6 +81,7 @@ function rateLimit(id: string, max = 20, windowMs = 5000) {
 
 app.setErrorHandler((err: Error & { statusCode?: number }, _req, reply) => {
   if (err instanceof social.SocialError) return reply.code(400).send({ error: err.message });
+  if (err instanceof arena.ArenaError) return reply.code(400).send({ error: err.message });
   if (err instanceof rmt.RmtError) return reply.code(400).send({ error: err.message });
   if (err instanceof accounts.AuthError) return reply.code(401).send({ error: err.message });
   if (err instanceof GameError) return reply.code(400).send({ error: err.message });
@@ -222,6 +225,15 @@ app.post('/api/team/create', async (req) => socialReply(req, (p, now) => { socia
 app.post('/api/team/join', async (req) => socialReply(req, (p, now) => { social.joinTeam(store, p, body(req).code, body(req).role, now); return social.teamView(store, p, now); }));
 app.post('/api/team/leave', async (req) => socialReply(req, (p, now) => { social.leaveTeam(store, p); return social.teamView(store, p, now); }));
 
+app.get('/api/arena', async (req) => socialReply(req, (p, now) => arena.arenaView(store, p, now), false));
+app.post('/api/arena/point', async (req) => socialReply(req, (p, now) => ({ ...arena.challengePoint(store, p, body(req).spec as never, now), view: arena.arenaView(store, p, now) })));
+app.post('/api/arena/pvp', async (req) => socialReply(req, (p, now) => ({ ...arena.pvpFight(store, p, now), view: arena.arenaView(store, p, now) })));
+app.get('/api/replay/:id', async (req) => {
+  const r = arena.getReplay(store, (req.params as { id: string }).id);
+  if (!r) throw Object.assign(new Error('Replay não encontrado'), { statusCode: 404 });
+  return r;
+});
+
 app.get('/api/rmt', async (req) => socialReply(req, (p, now) => rmt.rmtView(store, p, now), false));
 app.post('/api/rmt/list', async (req) => socialReply(req, (p, now) => { rmt.listRmt(store, p, body(req).uid, body(req).price, now); return rmt.rmtView(store, p, now); }));
 app.post('/api/rmt/cancel', async (req) => socialReply(req, (p, now) => { rmt.cancelRmt(store, p, body(req).id, now); return rmt.rmtView(store, p, now); }));
@@ -261,6 +273,8 @@ setInterval(() => {
   social.sweepTeams(store, now);
   social.sweepAuctions(store, now);
   rmt.sweepRmt(store, now);
+  arena.settleWars(store, now);
+  arena.settleSeasons(store, now);
   social.settleTerritories(store, now);
 }, 30_000).unref();
 
@@ -634,7 +648,23 @@ if (DEV) {
     p.inventory.plans.plano_cofre = (p.inventory.plans.plano_cofre ?? 0) + 1;
     giveRare(p, now, events); giveRare(p, now, events);
     for (const stars of [2, 3, 4, 5, 6, 6]) giveGear(p, stars, now, events); // equipamento com status
+    // capangas, fichas de chefão, discos e convites para testar
+    for (const [sp, lv] of [['matador', 60], ['mestre_cofre', 55], ['as_volante', 50], ['fantasma_rede', 45]] as const) addRecruit(p, { speciesId: sp, level: lv, ivs: { hp: 25, atk: 25, def: 25, spd: 25 } }, now);
+    p.inventory.plans.chefe_porto = (p.inventory.plans.chefe_porto ?? 0) + 2;
+    p.recruits.discs.atk = (p.recruits.discs.atk ?? 0) + 1;
+    p.recruits.invites.bom += 20; p.recruits.invites.otimo += 10;
     p.diamondsPaid += 1000;
+    store.savePlayer(p);
+    return { player: p, events, serverTime: now };
+  });
+
+  // Encontro na hora (testar o recrutamento)
+  app.post('/api/dev/encounter', async (req) => {
+    const p = authed(req);
+    const now = Date.now();
+    const events = advance(p, now);
+    p.recruits.encounter = rollEncounter(Math.max(5, p.level), Math.random, now, p.district);
+    if ((req.body as { lenda?: boolean } | undefined)?.lenda) p.recruits.encounter.lenda = true;
     store.savePlayer(p);
     return { player: p, events, serverTime: now };
   });
@@ -724,6 +754,15 @@ app.get('/api/health', async () => ({ ok: true }));
 await app.listen({ port: PORT, host: '0.0.0.0' });
 const io = new SocketServer(app.server, { cors: { origin: process.env.CORS_ORIGIN?.split(',') ?? '*' } });
 const lastChat = new Map<string, number>();
+// Calçadão: praça compartilhada, cada um aparece com o visual da gangue e balão de chat em cima
+interface PlazaGuy { id: string; nick: string; x: number; y: number; character: string; vehicle: string; vip: boolean; at: number }
+const plaza = new Map<string, PlazaGuy>();
+const PLAZA_W = 1200, PLAZA_H = 700;
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, g] of plaza) if (now - g.at > 120_000) plaza.delete(k);
+  if (plaza.size) io.to('plaza').emit('plaza:state', [...plaza.values()].slice(0, 80));
+}, 1000).unref();
 
 io.on('connection', (socket) => {
   const id = verifyToken(socket.handshake.auth?.token);
@@ -746,7 +785,23 @@ io.on('connection', (socket) => {
       vip: (fresh.vipUntil ?? 0) > now, founder: fresh.flags.founder,
     });
   });
-  socket.on('disconnect', () => io.emit('online', io.engine.clientsCount));
+  socket.on('plaza:join', () => {
+    const fresh = store.getPlayer(p.id)!;
+    socket.join('plaza');
+    plaza.set(socket.id, {
+      id: socket.id, nick: fresh.nick, x: 100 + Math.random() * (PLAZA_W - 200), y: 150 + Math.random() * (PLAZA_H - 300),
+      character: fresh.equipped.character, vehicle: fresh.equipped.vehicle, vip: (fresh.vipUntil ?? 0) > Date.now(), at: Date.now(),
+    });
+  });
+  socket.on('plaza:move', (pos: { x?: unknown; y?: unknown }) => {
+    const g = plaza.get(socket.id);
+    if (!g) return;
+    g.x = Math.max(20, Math.min(PLAZA_W - 20, Number(pos?.x) || g.x));
+    g.y = Math.max(60, Math.min(PLAZA_H - 20, Number(pos?.y) || g.y));
+    g.at = Date.now();
+  });
+  socket.on('plaza:leave', () => { plaza.delete(socket.id); socket.leave('plaza'); });
+  socket.on('disconnect', () => { plaza.delete(socket.id); io.emit('online', io.engine.clientsCount); });
 });
 
 app.log.info(`Servidor no ar na porta ${PORT}. Pix: ${paymentsLive() ? 'real' : 'teste'}. Cartão: ${stripeLive() ? 'real' : 'teste'}.`);

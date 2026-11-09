@@ -2,10 +2,11 @@
 import {
   DIAMOND_ITEMS, DISTRICTS, DRUGS, PROPERTIES, REAL_MONEY_PRODUCTS, ROBBERIES, RULES,
   costAt, dealingPointCost, isJailed, isVip, labUpgradeCost, lawyerCost, totalDiamonds,
+  INVITES, RECRUIT, STARTERS, incomePerHour, speciesById, VIP_SUPPLY,
   DECOR_ITEMS, HEIST_PLANS, isGearSlot, repairCost, SUPPLY, merchantValue, INSURANCE, LAUNDER, TUNING, insuranceCost, PARTS, PART_FOR, STAR_HEAT, UPGRADE_MAX, isLookBurned, ownsItem, partsForTier, burnedUntil, currentMission, missionDone, upgradeCost, upgradeMinLevel,
   type Action, type GameEvent, type Grant, type PlayerState,
 } from '@gti/shared';
-import { buySupplyRaw } from './idle';
+import { addRecruit, buySupplyRaw, tryRecruit } from './idle';
 import { enterHideout, gainXp, leaveHideout, normalizeSlots, resolveAlert } from './idle';
 
 export class GameError extends Error {}
@@ -340,6 +341,75 @@ export function applyAction(p: PlayerState, a: Action, now: number): GameEvent[]
       const left = Math.ceil((p.hideout!.until - now) / 1000);
       if (left > 0) fail(`Ainda está quente lá fora. Faltam ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}.`);
       return leaveHideout(p, now, false);
+    }
+    case 'pickStarter': {
+      const r = p.recruits;
+      if (r.starterPicked) fail('Você já escolheu seu primeiro capanga');
+      if (!STARTERS.includes(a.speciesId)) fail('Escolha um dos três');
+      addRecruit(p, { speciesId: a.speciesId, level: 5, ivs: { hp: 20, atk: 20, def: 20, spd: 20 }, bound: true }, now);
+      r.starterPicked = true;
+      return;
+    }
+    case 'recruit': {
+      if (!INVITES.some(i => i.id === a.invite)) fail('Convite inválido');
+      const ev: GameEvent[] = [];
+      const res = tryRecruit(p, a.invite, now, ev);
+      if (res === 'none') fail('Ele já foi embora');
+      if (res === 'no_invite') fail('Sem convite desse tipo: compre no Mercador');
+      return ev;
+    }
+    case 'skipEncounter': { p.recruits.encounter = null; return; }
+    case 'setTeam':
+    case 'setPvpTeam': {
+      const uids = [...new Set((a.uids ?? []).map(String))].slice(0, RECRUIT.teamSize);
+      if (uids.some(u => !p.recruits.depot.some(r => r.uid === u))) fail('Capanga não encontrado');
+      if (a.type === 'setTeam') { if (!uids.length) fail('O time precisa de pelo menos um capanga'); p.recruits.team = uids; }
+      else p.recruits.pvpTeam = uids;
+      return;
+    }
+    case 'setTrainee': {
+      if (a.uid && !p.recruits.depot.some(r => r.uid === a.uid)) fail('Capanga não encontrado');
+      p.recruits.trainee = a.uid ?? null;
+      return;
+    }
+    case 'setAutoRecruit': {
+      if (!INVITES.some(i => i.id === a.invite)) fail('Convite inválido');
+      p.recruits.auto = { on: !!a.on, invite: a.invite, minRarity: a.minRarity, onlyNew: !!a.onlyNew };
+      return;
+    }
+    case 'setAutoBoss': { p.recruits.autoBoss = !!a.on; return; }
+    case 'buyInvite': {
+      const inv = INVITES.find(i => i.id === a.invite) ?? fail('Convite inválido');
+      const qty = Math.max(1, Math.min(500, Math.floor(Number(a.qty) || 0)));
+      const unit = Math.max(5, Math.round(incomePerHour(p.level) * inv.priceHours * (isVip(p, now) ? 1 - VIP_SUPPLY.merchantDiscount : 1)));
+      spendCash(p, unit * qty);
+      p.recruits.invites[inv.id] = (p.recruits.invites[inv.id] ?? 0) + qty;
+      return;
+    }
+    case 'releaseRecruit': {
+      const i = p.recruits.depot.findIndex(r => r.uid === a.uid);
+      if (i < 0) fail('Capanga não encontrado');
+      const r = p.recruits.depot[i];
+      if (r.bound) fail('Seu primeiro capanga não sai da gangue');
+      if (p.recruits.team.length === 1 && p.recruits.team[0] === r.uid) fail('Ele é o único do time');
+      const s = speciesById(r.speciesId)!;
+      // o Mercador paga pelo "contrato": raridade, nível e potência
+      const mult = { comum: 0.05, raro: 0.2, epico: 0.6, lendario: 2 }[s.rarity] * (r.lenda ? 10 : 1);
+      p.cash += Math.max(10, Math.round(incomePerHour(p.level) * mult * (1 + r.level / 50)));
+      p.recruits.depot.splice(i, 1);
+      p.recruits.team = p.recruits.team.filter(u => u !== r.uid);
+      p.recruits.pvpTeam = p.recruits.pvpTeam.filter(u => u !== r.uid);
+      if (p.recruits.trainee === r.uid) p.recruits.trainee = null;
+      return;
+    }
+    case 'teachDisc': {
+      const r = p.recruits.depot.find(x => x.uid === a.uid) ?? fail('Capanga não encontrado');
+      if (!['hp', 'atk', 'def', 'spd'].includes(a.stat)) fail('Disco inválido');
+      if ((p.recruits.discs[a.stat] ?? 0) <= 0) fail('Você não tem esse disco');
+      if ((r.discs ?? []).length >= RECRUIT.maxDiscs) fail(`Cada capanga aprende até ${RECRUIT.maxDiscs} discos`);
+      p.recruits.discs[a.stat]! -= 1;
+      r.discs = [...(r.discs ?? []), a.stat];
+      return;
     }
     case 'finishTutorial': {
       p.tutorialDone = true;

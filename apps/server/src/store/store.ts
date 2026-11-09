@@ -3,7 +3,7 @@
 // mantendo esta mesma interface.
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-import type { Currency, PlayerState, RareInstance } from '@gti/shared';
+import type { Currency, PlayerState, RareInstance, Recruit } from '@gti/shared';
 
 /** Anúncio do mercado. O item fica guardado aqui (custódia) até vender, cancelar ou vencer. */
 export interface Listing {
@@ -11,7 +11,7 @@ export interface Listing {
   sellerId: string;
   sellerNick: string;
   sellerVip: boolean;
-  kind: 'rare' | 'part' | 'plan';
+  kind: 'rare' | 'part' | 'plan' | 'recruit';
   itemId: string;
   qty: number;
   /** Preço do lote inteiro, em diamantes */
@@ -19,6 +19,7 @@ export interface Listing {
   createdAt: number;
   expiresAt: number;
   rare?: RareInstance;
+  recruit?: Recruit;
 }
 
 export interface Sale { itemId: string; kind: Listing['kind']; qty: number; price: number; at: number }

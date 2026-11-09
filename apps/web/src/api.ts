@@ -1,4 +1,4 @@
-import type { Action, Currency, GameEvent, PlayerState, RareInstance, Rarity, RealMoneyProduct } from '@gti/shared';
+import type { Action, BattleResult, Currency, GameEvent, PlayerState, RareInstance, Rarity, RealMoneyProduct } from '@gti/shared';
 
 const TOKEN_KEY = 'nh_token';
 
@@ -44,8 +44,8 @@ export interface OrderStatus { status: OrderState; productName: string; amount: 
 export interface StateResponse { player: PlayerState; events: GameEvent[]; serverTime: number }
 
 export interface MarketListing {
-  id: string; sellerNick: string; sellerVip: boolean; kind: 'rare' | 'part' | 'plan'; itemId: string; name: string;
-  qty: number; price: number; createdAt: number; expiresAt: number; rare?: RareInstance;
+  id: string; sellerNick: string; sellerVip: boolean; kind: 'rare' | 'part' | 'plan' | 'recruit'; itemId: string; name: string;
+  qty: number; price: number; createdAt: number; expiresAt: number; rare?: RareInstance; recruit?: import('@gti/shared').Recruit;
 }
 export interface MarketView {
   listings: MarketListing[];
@@ -56,7 +56,7 @@ export interface MarketView {
 }
 export type MarketResponse = StateResponse & { market: MarketView };
 export type ListRequest =
-  | { kind: 'rare'; uid: string; price: number }
+  | { kind: 'rare' | 'recruit'; uid: string; price: number }
   | { kind: 'part' | 'plan'; itemId: string; qty: number; price: number };
 
 // ---------- cidade viva ----------
@@ -90,6 +90,15 @@ export interface AuctionInfo {
 }
 export interface AuctionView { open: AuctionInfo[]; recent: AuctionInfo[]; window: boolean; nextEnd: number }
 export type With<T> = StateResponse & { data: T };
+export interface Replay { id: string; at: number; kind: 'ponto' | 'pvp' | 'guerra'; title: string; sides: [string, string]; result: BattleResult }
+export interface ArenaView {
+  points: { spec: string; name: string; holder: string | null; mine: boolean; since: number; defenses: number; strength: number; cooldownUntil: number }[];
+  pointMinLevel: number;
+  pvp: { rating: number; wins: number; losses: number; best: number; minLevel: number; cooldownSec: number; lastAt: number; position: number | null; rank: string; season: string;
+    top: { nick: string; rating: number; rank: string; me: boolean }[] };
+  wars: { day: string; a: { id: string; name: string; tag: string }; b: { id: string; name: string; tag: string }; winner: 0 | 1; replayId: string }[];
+  recent: { id: string; at: number; kind: string; title: string; sides: [string, string]; winner: 0 | 1 }[];
+}
 export interface RmtListingView { id: string; seller: string; price: number; item: RareInstance; status: string; expiresAt: number; reservedByMe: boolean; mine: boolean; soldAt: number | null }
 export interface RmtView {
   enabled: boolean; linked: boolean; canSell: boolean;
@@ -134,6 +143,7 @@ export const api = {
   devLoot: () => call<StateResponse>('/api/dev/loot', {}),
   devCash: () => call<StateResponse>('/api/dev/cash', {}),
   devDirty: () => call<StateResponse>('/api/dev/dirty', {}),
+  devEncounter: () => call<StateResponse>('/api/dev/encounter', {}),
   devWanted: (stars: number) => call<StateResponse>('/api/dev/wanted', { stars }),
   devHideoutSkip: () => call<StateResponse>('/api/dev/hideout-skip', {}),
   adStart: (purpose: 'alert' | 'market_slot' = 'alert') => call<{ token: string; minSec: number }>('/api/ads/start', { purpose }),
@@ -142,6 +152,10 @@ export const api = {
   marketCancel: (id: string) => call<MarketResponse>('/api/market/cancel', { id }),
   marketBuy: (id: string) => call<MarketResponse>('/api/market/buy', { id }),
   adComplete: (token: string) => call<StateResponse>('/api/ads/complete', { token }),
+  arena: () => call<With<ArenaView>>('/api/arena'),
+  arenaPoint: (spec: string) => call<With<{ won: boolean; replayId: string; view: ArenaView }>>('/api/arena/point', { spec }),
+  arenaPvp: () => call<With<{ won: boolean; delta: number; rating: number; opponent: string; replayId: string; view: ArenaView }>>('/api/arena/pvp', {}),
+  replay: (id: string) => publicGet<Replay>(`/api/replay/${encodeURIComponent(id)}`),
   rmt: () => call<With<RmtView>>('/api/rmt'),
   rmtList: (uid: string, price: number) => call<With<RmtView>>('/api/rmt/list', { uid, price }),
   rmtCancel: (id: string) => call<With<RmtView>>('/api/rmt/cancel', { id }),

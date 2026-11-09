@@ -1,4 +1,5 @@
 import type { GearSlot, PerkId, SetId, StatId } from './content/gear';
+import type { Encounter, InviteId, Recruit, Stats4 } from './content/recruits';
 // Tipos compartilhados entre servidor e cliente.
 // Tudo que é "regra do jogo" vive no servidor; o cliente só exibe.
 
@@ -134,7 +135,8 @@ export interface PlayerState {
     /** Quantas vezes cada assalto foi concluído */
     jobCounts: Record<string, number>;
     biggestHeist?: number;
-  gearFound?: number; raresFound?: number; laundered?: number; teamHeists?: number;
+  gearFound?: number;
+  recruited?: number; pvpWins?: number; warsWon?: number; pointsHeld?: number; raresFound?: number; laundered?: number; teamHeists?: number;
     raceBest?: number; racesRun?: number; territoriesWon?: number; giftsSent?: number;
   };
   /** Índice da missão atual na cadeia MISSIONS */
@@ -199,6 +201,20 @@ export interface PlayerState {
   };
   /** Vendas por dinheiro real: valores retidos e liberados (em reais) */
   rmt: { pending: { amount: number; releaseAt: number; listingId: string }[]; available: number; sold: number; bought: number };
+  /** Capangas: time, depósito, álbum, convites e o encontro aberto agora */
+  recruits: {
+    team: string[]; depot: Recruit[];
+    album: Record<string, { seen: number; caught: number }>;
+    trainee: string | null; pvpTeam: string[];
+    invites: Record<InviteId, number>;
+    auto: { on: boolean; invite: InviteId; minRarity: Rarity; onlyNew: boolean };
+    encounter: Encounter | null;
+    starterPicked: boolean;
+    discs: Partial<Record<keyof Stats4, number>>;
+    autoBoss: boolean;
+  };
+  /** PvP ranqueado */
+  pvp: { rating: number; wins: number; losses: number; season: string; lastAt: number; best: number };
   /** Equipamento com status em uso, por peça (uid do item da mochila) */
   gearOn: Partial<Record<GearSlot, string>>;
   /** Dia (Brasília) em que o efeito "Blindado" já foi usado */
@@ -368,6 +384,13 @@ export type GameEvent =
   | { type: 'robbery_failed'; jobId: string; reason: 'sem_bala' }
   | { type: 'kit_used'; hp: number }
   | { type: 'revived'; left: number }
+  | { type: 'encounter'; speciesId: string; level: number; lenda: boolean }
+  | { type: 'recruited'; speciesId: string; level: number; lenda: boolean; auto: boolean }
+  | { type: 'recruit_failed'; speciesId: string }
+  | { type: 'recruit_level'; name: string; level: number }
+  | { type: 'promoted'; from: string; to: string }
+  | { type: 'boss_result'; bossId: string; won: boolean }
+  | { type: 'disc'; stat: string }
   | { type: 'downed'; reason: 'morto' | 'sem_cura' }
   | { type: 'supply_bought'; item: 'ammo' | 'kit'; qty: number; cost: number }
   | { type: 'confiscated'; amount: number; insured: boolean };
@@ -398,6 +421,17 @@ export type Action =
   | { type: 'resolveAlertVip' }
   | { type: 'dismissIntro' }
   | { type: 'finishTutorial' }
+  | { type: 'pickStarter'; speciesId: string }
+  | { type: 'recruit'; invite: InviteId }
+  | { type: 'skipEncounter' }
+  | { type: 'setTeam'; uids: string[] }
+  | { type: 'setPvpTeam'; uids: string[] }
+  | { type: 'setTrainee'; uid: string | null }
+  | { type: 'setAutoRecruit'; on: boolean; invite: InviteId; minRarity: Rarity; onlyNew: boolean }
+  | { type: 'buyInvite'; invite: InviteId; qty: number }
+  | { type: 'releaseRecruit'; uid: string }
+  | { type: 'teachDisc'; uid: string; stat: keyof Stats4 }
+  | { type: 'setAutoBoss'; on: boolean }
   | { type: 'buyCosmetic'; itemId: string; pay: 'cash' | 'diamonds' }
   | { type: 'buyUpgrade'; track: UpgradeTrack }
   | { type: 'buyDecor'; itemId: string; pay: 'cash' | 'diamonds' }

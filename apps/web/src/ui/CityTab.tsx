@@ -7,6 +7,7 @@ import ShareImage from './ShareImage';
 import RaceModal from './Race';
 import { ItemPreview } from './Preview';
 import { useNow } from './Hud';
+import Plaza from './Plaza';
 
 const ago = (at: number, now: number) => {
   const m = Math.max(0, Math.floor((now - at) / 60_000));
@@ -61,6 +62,8 @@ export default function CityPanel({ p, onState, onProfile }: { p: PlayerState; o
           {p.inbox.slice(0, 5).map(m => <p key={m.id} className={m.read ? 'small muted' : 'small'}>{m.text} <time>{ago(m.at, now)}</time></p>)}
         </div>
       )}
+
+      <Plaza p={p} />
 
       <div className="card race-card">
         <div className="row">

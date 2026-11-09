@@ -1,10 +1,34 @@
 import {
   DIAMOND_ITEMS, DISTRICTS, DRUGS, PROPERTIES, ROBBERIES, RULES,
   costAt, dealingPointCost, formatCash, formatDuration, isJailed, isTurbo, isVip, labUpgradeCost, totalDiamonds,
-  formatPrice, priceIn, INSURANCE, LAUNDER, insuranceCost, chaserFor, HEIST_PLANS, isLookBurned,
+  formatPrice, priceIn, INSURANCE, LAUNDER, insuranceCost, chaserFor, HEIST_PLANS, isLookBurned, analyzeJob, isBoss, teamPower, activeEvents,
+  type RobberyJob,
   type Action, type Currency, type DrugId, type PlayerState, type RealMoneyProduct,
 } from '@gti/shared';
 import { useNow } from './Hud';
+import { useState } from 'react';
+
+/** Análise do golpe: rende e custa por hora com os bônus de agora */
+function JobAnalysis({ p, job }: { p: PlayerState; job: RobberyJob }) {
+  const a = analyzeJob(p, job, Date.now());
+  return (
+    <div className="analysis">
+      <div className="kv">
+        <div><small>Grana por hora</small><b className="cash">{formatCash(a.cashPerHour)}</b></div>
+        <div><small>Lucro (menos bala e kit)</small><b className={a.netPerHour < 0 ? 'heat' : 'cash'}>{formatCash(a.netPerHour)}</b></div>
+        <div><small>XP por hora</small><b>{a.xpPerHour.toLocaleString('pt-BR')}</b></div>
+        <div><small>Golpes por hora</small><b>{a.runsPerHour.toFixed(1)}</b></div>
+        <div><small>Balas por hora</small><b>{a.ammoPerHour}</b></div>
+        <div><small>Kits por hora</small><b>{a.kitsPerHour}</b></div>
+        <div><small>Equipamentos por hora</small><b>{a.gearPerHour}</b></div>
+        <div><small>Encontros por hora</small><b>{a.encountersPerHour}</b></div>
+        <div><small>Força do time</small><b className={a.teamRatio < 1 ? 'heat' : 'cash'}>{Math.round(a.teamRatio * 100)}%</b></div>
+      </div>
+      {!a.armed && <p className="small heat">Sem arma que sirva aqui: só 1% dá certo.</p>}
+      <p className="small muted">Com seu Clube, equipamento, veículo, capangas e eventos de agora. Noite e território somam por fora.</p>
+    </div>
+  );
+}
 
 type Act = (a: Action) => void;
 
@@ -62,12 +86,19 @@ export function RobberiesPanel({ p, act, fetchedAt, selected, onMap }: { p: Play
       {!isVip(p, now) && <p className="hint">O Clube Rockeiro libera um segundo assalto ao mesmo tempo.</p>}
 
       {HEIST_PLANS.some(h => (p.inventory.plans[h.id] ?? 0) > 0) && <>
-        <h3>Planos de golpe</h3>
-        <p className="lead">Caem em golpes de 3 estrelas para cima. Rodam uma vez, pagam muito e podem render item raro. Também dá para vender no Mercado.</p>
+        <h3>Planos e chefões</h3>
+        <p className="lead">Planos caem em golpes de 3 estrelas para cima. Fichas de chefão caem nos golpes de 6 estrelas: cada ficha é uma tentativa, e o time de capangas precisa ter força para vencer. Os dois também se vendem no Mercado.</p>
+        {HEIST_PLANS.some(h => isBoss(h) && (p.inventory.plans[h.id] ?? 0) > 0) && (
+          <label className="check small"><input type="checkbox" checked={p.recruits.autoBoss} onChange={e => act({ type: 'setAutoBoss', on: e.target.checked })} /> Repetir o chefão sozinho enquanto tiver ficha</label>
+        )}
         {HEIST_PLANS.filter(h => (p.inventory.plans[h.id] ?? 0) > 0).map(h => (
           <div key={h.id} className="card">
             <div className="row"><strong>{h.planName} <span className="badge">{p.inventory.plans[h.id]}×</span></strong><span className="muted small">{formatDuration(h.durationSec)}</span></div>
             <p className="small muted">{h.description}</p>
+            {isBoss(h) && (() => {
+              const power = Math.round(teamPower(p, h));
+              return <p className={`small ${power >= h.boss.power ? 'cash' : 'heat'}`}>Força do seu time: {power} de {h.boss.power} pedidos{power < h.boss.power ? ' (perde a ficha)' : ''}</p>;
+            })()}
             <div className="tags">
               <span className="cash">{formatCash(h.cash[0])} a {formatCash(h.cash[1])}</span>
               <span>+{h.xp} XP</span>
@@ -100,6 +131,12 @@ export function RobberiesPanel({ p, act, fetchedAt, selected, onMap }: { p: Play
               </span>
               <span className="small muted">Quem vem atrás: <b>{chaserFor(j.maxStars)}</b></span>
             </div>
+            {!locked && (
+              <details className="analysis-toggle">
+                <summary>Análise do golpe</summary>
+                <JobAnalysis p={p} job={j} />
+              </details>
+            )}
             <button disabled={locked || running || jailed || !!p.hideout}
               onClick={() => act({ type: 'startRobbery', slot: freeSlot >= 0 ? freeSlot : 0, jobId: j.id })}>
               {locked ? `Abre no nível ${j.minLevel}` : p.hideout ? 'Gangue escondida' : running ? 'Em andamento' : freeSlot >= 0 ? 'Mandar a gangue' : 'Trocar para este alvo'}

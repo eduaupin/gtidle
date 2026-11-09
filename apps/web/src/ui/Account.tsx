@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { firebaseConfigured } from '../auth';
+import { t } from '../i18n';
 import type { PlayerState } from '@gti/shared';
 import { loginDiscord, loginGoogle } from '../auth';
 
@@ -42,12 +43,12 @@ export function LoginButtons({ nick, refCode, onDone, linking = false, has = [] 
     <div className="login-buttons">
       {google && !has.includes('firebase') && (
         <button className="btn-google" disabled={busy} onClick={() => run(() => loginGoogle({ nick, ref: refCode }))}>
-          <GoogleIcon /> {linking ? 'Ligar conta Google' : 'Entrar com Google'}
+          <GoogleIcon /> {linking ? 'Ligar conta Google' : t('Entrar com Google')}
         </button>
       )}
       {discord && !has.includes('discord') && (
         <button className="btn-discord" disabled={busy} onClick={() => run(() => loginDiscord({ nick, ref: refCode }))}>
-          <DiscordIcon /> {linking ? 'Ligar Discord' : 'Entrar com Discord'}
+          <DiscordIcon /> {linking ? 'Ligar Discord' : t('Entrar com Discord')}
         </button>
       )}
       {err && <p className="msg bad">{err}</p>}

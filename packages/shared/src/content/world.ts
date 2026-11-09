@@ -63,6 +63,27 @@ const job = (id: string, name: string, district: DistrictId, minLevel: number, d
   xp: number, heat: number, maxStars: number, building: RobberyJob['building']): RobberyJob =>
   ({ id, name, district, minLevel, durationSec, cash, xp, heat, maxStars, building });
 
+const fl = (id: string, name: string, district: RobberyJob['district'], minLevel: number, durationSec: number, cash: [number, number],
+  xp: number, heat: number, maxStars: number, building: RobberyJob['building']): RobberyJob =>
+  ({ id, name, district, minLevel, durationSec, cash, xp, heat, maxStars, building });
+
+/** Fora da Lei: golpes depois do farol, nos extremos do mapa. Pede time forte e muita bala. */
+export const ENDGAME_ROBBERIES: RobberyJob[] = [
+  fl('fl_comboio', 'Comboio blindado da serra', 'mata', 90, 3600, [1600000, 2000000], 16000, 30, 6, 'garagem'),
+  fl('fl_cassino', 'Cofre do cassino flutuante', 'marina', 95, 7200, [3600000, 4400000], 30000, 40, 6, 'banco'),
+  fl('fl_refinaria', 'Pátio da refinaria', 'porto_oeste', 100, 5400, [3200000, 3900000], 27000, 34, 6, 'porto'),
+  fl('fl_casa_moeda', 'Casa da Moeda', 'centro', 105, 10800, [7500000, 9000000], 52000, 50, 6, 'banco'),
+  fl('fl_aeroporto_vip', 'Hangar dos jatinhos', 'vila_norte', 110, 7200, [6500000, 8000000], 46000, 44, 6, 'garagem'),
+  fl('fl_leilao_joias', 'Leilão de joias da coroa', 'orla', 115, 9000, [10000000, 12500000], 66000, 48, 6, 'joalheria'),
+  fl('fl_porto_franco', 'Porto franco', 'porto', 120, 10800, [14000000, 17000000], 80000, 50, 6, 'porto'),
+  fl('fl_banco_central', 'Reserva do banco central', 'centro', 125, 14400, [22000000, 27000000], 110000, 55, 6, 'banco'),
+  fl('fl_ilha_privada', 'Ilha privada do magnata', 'ilha_sol', 130, 14400, [28000000, 34000000], 130000, 55, 6, 'banco'),
+  fl('fl_trem_ouro', 'Trem do ouro', 'mata', 135, 18000, [40000000, 48000000], 165000, 60, 6, 'garagem'),
+  fl('fl_cofre_farol', 'O cofre sob o farol', 'farol', 142, 21600, [60000000, 72000000], 210000, 65, 6, 'joalheria'),
+  fl('fl_ultimo_golpe', 'O último golpe', 'mansoes', 150, 28800, [100000000, 120000000], 300000, 70, 6, 'banco'),
+];
+
+
 export const ROBBERIES: RobberyJob[] = [
   { id: 'carteira', name: 'Bater carteira', district: 'periferia', minLevel: 1, durationSec: 20,
     cash: [8, 14], xp: 3, heat: 1, maxStars: 1, building: 'rua' },
@@ -104,6 +125,7 @@ export const ROBBERIES: RobberyJob[] = [
   job('garagem_luxo', 'Garagem de carros de luxo', 'mansoes', 80, 5400, [900000, 1100000], 12000, 40, 6, 'garagem'),
   job('mansao', 'Mansão do Chefão', 'mansoes', 82, 14400, [2500000, 3000000], 25000, 60, 6, 'banco'),
   job('farol_tesouro', 'Tesouro do farol', 'farol', 85, 21600, [6000000, 8000000], 50000, 70, 6, 'joalheria'),
+  ...ENDGAME_ROBBERIES,
 ];
 
 // Nomes fictícios de propósito. O jogo só mostra timers e números — nada de "como fazer".
