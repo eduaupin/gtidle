@@ -15,14 +15,14 @@ export interface TourStep {
 export const TOUR: TourStep[] = [
   { title: 'Bem-vindo à Costa Dourada', text: 'Você monta uma gangue que trabalha sozinha, até com o jogo fechado. Em 1 minuto eu te mostro o que importa. Dá para pular e rever depois em "Como jogar".' },
   { target: 'cash', title: 'Grana e nível', text: 'Cada assalto dá grana e XP de Respeito. Subir de nível libera alvos maiores e novos distritos no mapa.' },
-  { target: 'tabs', tab: 'assaltos', title: '1º passo: escolher o assalto', text: 'Na aba Assaltos você escolhe o alvo. Comece com "Bater carteira": não precisa de bala e a gangue repete sozinha.' },
-  { target: 'objective', title: 'Siga a placa amarela', text: 'O objetivo mostra o próximo passo e quanto paga. Terminou, toque em "Receber". É o caminho mais rápido no começo.' },
-  { target: 'vitals', tab: 'inventario', title: '2º passo: vida, balas e kits', text: 'Golpe de 2 estrelas ou mais gasta bala e machuca. Sem bala, só 1% dá certo. Se a vida ou os kits acabarem, a gangue volta para o esconderijo e PARA de farmar.' },
-  { target: 'sheet', tab: 'inventario', title: 'Mercador e mochila', text: 'Aqui você compra munição e kits com a grana do jogo (dá para deixar "Repor sozinha" ligado) e vê os itens que caem nos assaltos: armas, roupas, carros e motos com status.' },
+  { target: 'tabs', tab: 'assaltos', title: '1º passo: escolher o assalto', text: 'O jogo tem 5 seções: Rua (ganhar grana), Gangue (capangas e itens), Disputas, Cidade e Loja. Em Rua, na aba Assaltos, você escolhe o alvo. Comece com "Bater carteira": não precisa de bala e a gangue repete sozinha.' },
+  { target: 'objective', title: 'Siga a placa amarela', text: 'Ela mostra o próximo objetivo e quanto paga; terminou, toque em "Receber". Se algo travar a gangue (sem bala, sem kit, preso), o aviso aparece aqui em cima com o botão que resolve.' },
+  { target: 'vitals', tab: 'inventario', title: '2º passo: vida, balas e kits', text: 'Golpe de 2 estrelas ou mais gasta bala e machuca. Sem bala, só 1% dá certo. Se a vida ou os kits acabarem, a gangue volta para o esconderijo e para de farmar. O número fica amarelo quando está acabando.' },
+  { target: 'sheet', tab: 'inventario', title: 'Mercador e mochila', text: 'Em Gangue, aba Inventário, você compra munição e kits com a grana do jogo (dá para deixar "Repor sozinha" ligado) e vê os itens que caem nos assaltos: armas, roupas, carros e motos com status.' },
   { target: 'heat', title: 'Cuidado com as estrelas', text: 'Todo crime sobe o procurado. Com 3 estrelas se esconda; com 4 a polícia queima sua roupa e carro; no topo é cadeia. Golpe pequeno chama pouca polícia.' },
-  { target: 'sheet', tab: 'imoveis', title: '3º passo: renda parada', text: 'Com as primeiras centenas de dólares, compre imóveis: eles pingam grana o tempo todo e lavam o dinheiro sujo dos golpes grandes.' },
-  { target: 'sheet', tab: 'mercado', title: 'Itens valem dinheiro', text: 'Item que você não usa vende no Mercador na hora, no Mercado por diamantes ou, quando liberado, para outros jogadores por dinheiro real.' },
-  { target: 'account', title: 'Salve seu progresso', text: 'Jogando como convidado, limpar o navegador apaga tudo. Ligue Google ou Discord em "Conta" e jogue de qualquer aparelho.' },
+  { target: 'sheet', tab: 'imoveis', title: '3º passo: renda parada', text: 'Em Rua, aba Imóveis: com as primeiras centenas de dólares, compre imóveis: eles pingam grana o tempo todo e lavam o dinheiro sujo dos golpes grandes.' },
+  { target: 'sheet', tab: 'mercado', title: 'Itens valem dinheiro', text: 'Item que você não usa vende no Mercador na hora, no Mercado (seção Cidade) por diamantes ou, quando liberado, para outros jogadores por dinheiro real.' },
+  { target: 'account', title: 'Salve seu progresso', text: 'Jogando como convidado, limpar o navegador apaga tudo. Abra o Menu, toque em Conta e ligue Google ou Discord para jogar de qualquer aparelho. Mapa, ficha, foto e idioma também ficam no Menu.' },
   { title: 'No que focar agora', text: 'Nível 1 a 10: carteira e banca, objetivos e primeiros imóveis. Nível 10 a 30: arma com bala, kits, bonde com amigos e equipamento melhor. Nível 30+: golpes grandes, lavagem, golpe em equipe e território. Boa sorte, chefe.' },
 ];
 

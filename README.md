@@ -73,6 +73,23 @@ clique no minimapa para pular até um ponto. "Seguir a gangue" volta a câmera p
 Para trocar por sprites desenhados à mão: substitua `drawCar`, `drawPerson` e as texturas em
 `textures.ts` por imagens; a câmera, a projeção e as rotas continuam iguais.
 
+## Interface
+
+- **5 seções** em vez de 14 abas soltas: Rua (Assaltos, Imóveis, Galpão), Gangue (Capangas, Inventário,
+  Melhorias, Visual, Base), Disputas (Bonde, Arena), Cidade (Calçadão, Mercado, Chat) e Loja. Cada seção
+  lembra a última aba aberta. No celular as seções viram a barra fixa de baixo. Config em `ui/Nav.tsx`.
+- **Próximo passo** (`ui/NextStep.tsx`): no topo da coluna, o problema que trava o farm vem antes do
+  objetivo, sempre com o botão que resolve (preso, gangue no esconderijo, sem arma, sem bala, sem kit,
+  gangue parada, grana suja sem imóvel, convidado sem conta). Embaixo, a placa âmbar do objetivo,
+  compacta; "por que fazer" abre a explicação e a jornada pelos distritos.
+- **Topo enxuto**: nível, grana, diamantes, vida/balas/kits (neutro; fica amarelo quando está acabando),
+  procurado e eventos. Mapa, ficha, foto, compartilhar, conta, como jogar e idioma ficam no **Menu**.
+- **Assaltos**: o alvo com mais lucro por hora ganha o selo "Mais lucro agora"; alvos trancados viram uma
+  linha "Próximo alvo" e o resto fica em "Ver os outros".
+- Âmbar é reservado para "o que fazer agora" (placa do objetivo e botões de ação).
+- Capangas: um alvo pede 1 capanga mediano até o nível 9, 2 do 10 ao 24 e 3 a partir do 25
+  (`membersFor` em `recruits.ts`), então o capanga inicial já dá conta dos primeiros alvos.
+
 ## Como o jogo funciona
 
 | Sistema | Onde mexer |

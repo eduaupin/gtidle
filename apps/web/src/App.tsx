@@ -7,7 +7,8 @@ import { api, ApiError, clearToken, getToken, initialCurrency, saveCurrency } fr
 import CityCanvas from './game/CityCanvas';
 import Hud, { useNow } from './ui/Hud';
 import Chat from './ui/Chat';
-import Objective from './ui/Objective';
+import NextStep from './ui/NextStep';
+import { SectionNav, SubTabs, firstTabs, sectionOf, type Dot, type SectionId, type Tab } from './ui/Nav';
 import Intro from './ui/Intro';
 import AlertCard from './ui/AlertCard';
 import HideoutCard from './ui/HideoutCard';
@@ -20,7 +21,6 @@ import LookBurnCard from './ui/LookBurnCard';
 import ShareModal from './ui/ShareModal';
 import WorldMap from './ui/WorldMap';
 import MarketPanel from './ui/Market';
-import Icon from './ui/Icon';
 import CrewPanel from './ui/Crew';
 import InventoryPanel from './ui/Inventory';
 import RecruitsPanel from './ui/Recruits';
@@ -32,14 +32,6 @@ import { AccountModal, LoginButtons, RESULT_TEXT } from './ui/Account';
 import { consumeLoginHash } from './auth';
 import Tutorial from './ui/Tutorial';
 import { LANGS, lang, setLang, t } from './i18n';
-
-type Tab = 'assaltos' | 'capangas' | 'arena' | 'inventario' | 'lab' | 'imoveis' | 'gangue' | 'visual' | 'base' | 'bonde' | 'cidade' | 'mercado' | 'loja' | 'chat';
-const TABS: [Tab, string, string?][] = [
-  ['assaltos', 'Assaltos', 'i_car'], ['capangas', 'Capangas', 'i_star'], ['inventario', 'Inventário', 'i_shield'], ['arena', 'Arena', 'i_vip'],
-  ['lab', 'Galpão', 'i_lab'], ['imoveis', 'Imóveis', 'i_cash'], ['gangue', 'Gangue', 'i_badge'],
-  ['visual', 'Visual', 'i_crown'], ['base', 'Base', 'i_house'], ['bonde', 'Bonde', 'i_skull'], ['cidade', 'Cidade', 'i_glass'],
-  ['mercado', 'Mercado', 'i_gem_badge'], ['loja', 'Loja', 'i_diamond'], ['chat', 'Chat', 'i_heart'],
-];
 
 interface LogLine { id: number; at: number; text: string; kind: 'good' | 'bad' | 'info' }
 
@@ -131,9 +123,13 @@ function NotifyPrompt({ show }: { show: boolean }) {
 
 function Diary({ lines }: { lines: LogLine[] }) {
   const now = useNow(1000);
+  const [open, setOpen] = useState(false);
   return (
-    <aside className="diary" aria-live="polite">
-      <h3>O que está acontecendo</h3>
+    <aside className={`diary ${open ? 'open' : ''}`} aria-live="polite">
+      <div className="diary-head">
+        <h3>O que está acontecendo</h3>
+        {lines.length > 1 && <button className="diary-more" aria-expanded={open} onClick={() => setOpen(o => !o)}>{open ? 'Menos' : 'Ver mais'}</button>}
+      </div>
       {lines.length === 0 && <p className="muted">A gangue saiu para o primeiro corre. O carro com o anel amarelo é o seu.</p>}
       {lines.slice(-5).reverse().map(l => (
         <p key={l.id} className={l.kind}><span>{l.text}</span><time>{ago(l.at, now)}</time></p>
@@ -145,7 +141,19 @@ function Diary({ lines }: { lines: LogLine[] }) {
 export default function App() {
   const [player, setPlayer] = useState<PlayerState | null>(null);
   const [fetchedAt, setFetchedAt] = useState(Date.now());
-  const [tab, setTab] = useState<Tab>('assaltos');
+  const [tab, setTabRaw] = useState<Tab>('assaltos');
+  // cada seção lembra a última aba aberta
+  const [lastTab, setLastTab] = useState<Record<SectionId, Tab>>({ ...firstTabs });
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const setTab = useCallback((next: Tab) => {
+    setTabRaw(next);
+    setLastTab(prev => ({ ...prev, [sectionOf(next).id]: next }));
+  }, []);
+  // no celular a lista fica embaixo do mapa: trocar de aba leva até ela
+  const goTab = useCallback((next: Tab) => {
+    setTab(next);
+    if (window.matchMedia('(max-width: 900px)').matches) requestAnimationFrame(() => sheetRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }));
+  }, [setTab]);
   const [selectedJob, setSelectedJob] = useState<string | null>(null);
   const [log, setLog] = useState<LogLine[]>([]);
   const [toast, setToast] = useState<string | null>(null);
@@ -266,7 +274,7 @@ export default function App() {
     if (player && !player.seenIntro) act({ type: 'dismissIntro' });
     if (player && !player.tutorialDone) setTour(0); // primeira vez: emenda o tutorial guiado
   };
-  const tourTab = useCallback((t: string) => setTab(t as Tab), []);
+  const tourTab = useCallback((t: string) => setTab(t as Tab), [setTab]);
   const closeTour = (done: boolean) => { setTour(null); setTab('assaltos'); if (player && !player.tutorialDone) act({ type: 'finishTutorial' }); void done; };
   const onPaid = useCallback(() => { refresh(); }, [refresh]);
 
@@ -293,26 +301,30 @@ export default function App() {
   if (!player) return <main className="loading">Carregando a cidade…</main>;
 
   const mission = currentMission(player);
-  const missionTab = mission && !missionDone(player) ? mission.tab : null;
+  const dots: Partial<Record<Tab, Dot>> = {};
+  if ((player.inbox ?? []).some(m => !m.read)) dots.cidade = 'news';
+  if (mission && !missionDone(player)) dots[mission.tab as Tab] = 'mission';
 
   return (
     <div className="app">
-      <Hud player={player} onLawyer={() => act({ type: 'payLawyer' })} onShop={() => setTab('loja')} onHelp={() => setShowIntro(true)} onShare={() => setSharing(true)} onMap={() => setShowMap(true)}
-        onPhoto={() => setPhoto(true)} onProfile={() => setProfileCode(player.referral.code)} onDirty={() => setTab('imoveis')}
-        onAccount={() => setAccount(true)} onInventory={() => setTab('inventario')} />
+      <Hud player={player} onLawyer={() => act({ type: 'payLawyer' })} onShop={() => goTab('loja')} onHelp={() => setShowIntro(true)} onShare={() => setSharing(true)} onMap={() => setShowMap(true)}
+        onPhoto={() => setPhoto(true)} onProfile={() => setProfileCode(player.referral.code)} onDirty={() => goTab('imoveis')}
+        onAccount={() => setAccount(true)} onInventory={() => goTab('inventario')} />
       <div className="layout">
         <section className="map" aria-label="Mapa">
           <CityCanvas player={player} fetchedAt={fetchedAt}
-            onSelectJob={id => { setSelectedJob(id); setTab('assaltos'); }}>
+            onSelectJob={id => { setSelectedJob(id); goTab('assaltos'); }}>
             <Diary lines={log} />
             <EncounterPopup p={player} act={act} />
             <div className="map-top">
-              <AlertCard p={player} onState={apply} onVip={() => act({ type: 'resolveAlertVip' })} onShop={() => setTab('loja')} />
-              <LookBurnCard p={player} act={act} onLook={() => setTab('visual')} />
-              <HideoutCard p={player} act={act} onShop={() => setTab('loja')} />
+              <AlertCard p={player} onState={apply} onVip={() => act({ type: 'resolveAlertVip' })} onShop={() => goTab('loja')} />
+              <LookBurnCard p={player} act={act} onLook={() => goTab('visual')} />
+              <HideoutCard p={player} act={act} onShop={() => goTab('loja')} />
               {!player.alert && !player.heatWarning && !player.hideout && <NotifyPrompt show={player.level >= RULES.alertMinLevel} />}
               {import.meta.env.DEV && (
-                <div className="dev-tools">
+                <details className="dev-tools">
+                  <summary>Testes (só em desenvolvimento)</summary>
+                  <div className="dev-list">
                   {([
                     ['+$100.000', api.devCash, true],
                     ['+$50.000 sujo', api.devDirty, true],
@@ -331,34 +343,29 @@ export default function App() {
                       try { apply(await fn()); } catch (e) { setToast((e as Error).message); setTimeout(() => setToast(null), 3500); }
                     }}>{label}</button>
                   ))}
-                  <small>só em desenvolvimento</small>
-                </div>
+                  </div>
+                </details>
               )}
             </div>
           </CityCanvas>
         </section>
         <div className="side">
-          <Objective p={player} onClaim={() => act({ type: 'claimMission' })} onGo={t => setTab(t)} />
-          <div className="sheet" data-tour="sheet">
-            <nav className="tabs" aria-label="Seções" data-tour="tabs">
-              {TABS.map(([id, label, icon]) => (
-                <button key={id} className={tab === id ? 'tab on' : 'tab'} onClick={() => setTab(id)} aria-current={tab === id}>
-                  <Icon name={icon ?? 'i_star'} size={1.15} /><span className="tab-label">{t(label)}</span>{missionTab === id && tab !== id && <span className="dot" aria-label="objetivo aqui" />}
-                </button>
-              ))}
-            </nav>
+          <NextStep p={player} act={act} onGo={goTab} onLawyer={() => act({ type: 'payLawyer' })} onAccount={() => setAccount(true)} />
+          <div className="sheet" data-tour="sheet" ref={sheetRef}>
+            <SectionNav tab={tab} dots={dots} onSection={s => goTab(sectionOf(tab).id === s ? tab : lastTab[s])} />
+            <SubTabs tab={tab} level={player.level} dots={dots} onTab={setTab} />
             {tab === 'assaltos' && <RobberiesPanel p={player} act={act} fetchedAt={fetchedAt} selected={selectedJob} onMap={() => setShowMap(true)} />}
             {tab === 'lab' && <LabPanel p={player} act={act} fetchedAt={fetchedAt} />}
             {tab === 'imoveis' && <PropertiesPanel p={player} act={act} />}
             {tab === 'loja' && <ShopPanel p={player} act={act} onBuy={setBuying} products={shopInfo.products}
               currency={currency} onCurrency={setCurrency} anyLive={shopInfo.pixLive || shopInfo.cardLive} />}
-            {tab === 'mercado' && <MarketPanel p={player} onState={apply} onVip={() => setTab('loja')} />}
+            {tab === 'mercado' && <MarketPanel p={player} onState={apply} onVip={() => goTab('loja')} />}
             {tab === 'gangue' && <GangPanel p={player} act={act} onShare={() => setSharing(true)} />}
           {tab === 'visual' && <LookPanel p={player} act={act} />}
           {tab === 'base' && <BasePanel p={player} act={act} />}
             {tab === 'capangas' && <RecruitsPanel p={player} act={act} onState={apply} />}
             {tab === 'arena' && <ArenaPanel p={player} onState={apply} />}
-            {tab === 'inventario' && <InventoryPanel p={player} act={act} onState={apply} onGoMarket={() => setTab('mercado')} />}
+            {tab === 'inventario' && <InventoryPanel p={player} act={act} onState={apply} onGoMarket={() => goTab('mercado')} />}
             {tab === 'bonde' && <CrewPanel p={player} onState={apply} />}
             {tab === 'cidade' && <CityPanel p={player} onState={apply} onProfile={setProfileCode} />}
             {tab === 'chat' && <Chat />}

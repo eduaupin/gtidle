@@ -46,10 +46,48 @@ export function RobberiesPanel({ p, act, fetchedAt, selected, onMap }: { p: Play
   const jailed = isJailed(p, now);
   const jobs = ROBBERIES.filter(r => r.district === p.district);
   const freeSlot = p.robberies.findIndex(s => !s.jobId);
+  const open = jobs.filter(j => p.level >= j.minLevel);
+  const locked = jobs.filter(j => p.level < j.minLevel);
+  // o alvo que mais dá lucro por hora agora (já descontando bala e kit)
+  const best = open.length > 1 ? open.reduce((a, b) => (analyzeJob(p, b, now).netPerHour > analyzeJob(p, a, now).netPerHour ? b : a)) : null;
+
+  const jobCard = (j: RobberyJob) => {
+    const isLocked = p.level < j.minLevel;
+    const running = p.robberies.some(s => s.jobId === j.id);
+    return (
+      <div key={j.id} className={`card ${selected === j.id ? 'selected' : ''} ${isLocked ? 'locked' : ''}`}>
+        <div className="row">
+          <strong>{j.name}{best?.id === j.id && <span className="badge best">Mais lucro agora</span>}</strong>
+          <span className="muted small">a cada {formatDuration(j.durationSec)}</span>
+        </div>
+        <div className="tags">
+          <span className="cash">{formatCash(j.cash[0])} a {formatCash(j.cash[1])}</span>
+          <span>+{j.xp} XP</span>
+          <span className="heat">+{j.heat} procurado</span>
+        </div>
+        <div className="chase">
+          <span className="chase-stars" aria-label={`Até ${j.maxStars} estrelas`}>
+            {Array.from({ length: 6 }, (_, i) => <i key={i} className={i < j.maxStars ? 'on' : ''}>★</i>)}
+          </span>
+          <span className="small muted">Quem vem atrás: <b>{chaserFor(j.maxStars)}</b></span>
+        </div>
+        {!isLocked && (
+          <details className="analysis-toggle">
+            <summary>Análise do golpe</summary>
+            <JobAnalysis p={p} job={j} />
+          </details>
+        )}
+        <button disabled={isLocked || running || jailed || !!p.hideout}
+          onClick={() => act({ type: 'startRobbery', slot: freeSlot >= 0 ? freeSlot : 0, jobId: j.id })}>
+          {isLocked ? `Abre no nível ${j.minLevel}` : p.hideout ? 'Gangue escondida' : running ? 'Em andamento' : freeSlot >= 0 ? 'Mandar a gangue' : 'Trocar para este alvo'}
+        </button>
+      </div>
+    );
+  };
 
   return (
     <div className="panel">
-      <p className="lead">Escolha um alvo e a gangue repete o assalto sozinha. Alvos maiores pagam mais e demoram mais. Golpe pequeno só chama policial a pé; golpe grande chama SWAT e helicóptero (até 6 estrelas).</p>
+      <p className="lead">A gangue repete o alvo sozinha, até com o jogo fechado. Alvo maior paga mais e chama mais polícia.</p>
 
       <h3>Na rua agora</h3>
       {p.hideout && (
@@ -114,36 +152,19 @@ export function RobberiesPanel({ p, act, fetchedAt, selected, onMap }: { p: Play
       </>}
 
       <h3>Alvos em {DISTRICTS.find(d => d.id === p.district)!.name}</h3>
-      {jobs.map(j => {
-        const locked = p.level < j.minLevel;
-        const running = p.robberies.some(s => s.jobId === j.id);
-        return (
-          <div key={j.id} className={`card ${selected === j.id ? 'selected' : ''} ${locked ? 'locked' : ''}`}>
-            <div className="row"><strong>{j.name}</strong><span className="muted small">a cada {formatDuration(j.durationSec)}</span></div>
-            <div className="tags">
-              <span className="cash">{formatCash(j.cash[0])} a {formatCash(j.cash[1])}</span>
-              <span>+{j.xp} XP</span>
-              <span className="heat">+{j.heat} procurado</span>
-            </div>
-            <div className="chase">
-              <span className="chase-stars" aria-label={`Até ${j.maxStars} estrelas`}>
-                {Array.from({ length: 6 }, (_, i) => <i key={i} className={i < j.maxStars ? 'on' : ''}>★</i>)}
-              </span>
-              <span className="small muted">Quem vem atrás: <b>{chaserFor(j.maxStars)}</b></span>
-            </div>
-            {!locked && (
-              <details className="analysis-toggle">
-                <summary>Análise do golpe</summary>
-                <JobAnalysis p={p} job={j} />
-              </details>
-            )}
-            <button disabled={locked || running || jailed || !!p.hideout}
-              onClick={() => act({ type: 'startRobbery', slot: freeSlot >= 0 ? freeSlot : 0, jobId: j.id })}>
-              {locked ? `Abre no nível ${j.minLevel}` : p.hideout ? 'Gangue escondida' : running ? 'Em andamento' : freeSlot >= 0 ? 'Mandar a gangue' : 'Trocar para este alvo'}
-            </button>
-          </div>
-        );
-      })}
+      {open.map(j => jobCard(j))}
+      {locked[0] && (
+        <div className="next-target">
+          <span>Próximo alvo: <b>{locked[0].name}</b>, paga {formatCash(locked[0].cash[0])} a {formatCash(locked[0].cash[1])}</span>
+          <span className="badge">Abre no nível {locked[0].minLevel}</span>
+        </div>
+      )}
+      {locked.length > 1 && (
+        <details className="locked-list">
+          <summary>Ver os outros {locked.length - 1} alvos trancados</summary>
+          {locked.slice(1).map(j => jobCard(j))}
+        </details>
+      )}
 
       <h3>Regiões de Costa Dourada</h3>
       <p className="lead">São {DISTRICTS.length} regiões, da Periferia à Ilha do Farol. Cada uma tem alvos próprios e paga mais pelo produto do galpão.</p>

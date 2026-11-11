@@ -53,7 +53,7 @@ export default function CityPanel({ p, onState, onProfile }: { p: PlayerState; o
   };
 
   return (
-    <div className="panel city">
+    <div className="panel city-tab">
       {msg && <p className={msg.bad ? 'msg bad' : 'msg'}>{msg.text}</p>}
 
       {p.inbox.length > 0 && (

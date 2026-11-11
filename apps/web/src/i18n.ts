@@ -15,7 +15,9 @@ const D: Record<string, [string, string]> = {
   'Assaltos': ['Heists', 'Asaltos'], 'Capangas': ['Crew', 'Secuaces'], 'Inventário': ['Inventory', 'Inventario'], 'Arena': ['Arena', 'Arena'],
   'Galpão': ['Warehouse', 'Galpón'], 'Imóveis': ['Properties', 'Inmuebles'], 'Gangue': ['Gang', 'Pandilla'], 'Visual': ['Look', 'Estilo'],
   'Base': ['Hideout', 'Guarida'], 'Bonde': ['Squad', 'Banda'], 'Cidade': ['City', 'Ciudad'], 'Mercado': ['Market', 'Mercado'], 'Loja': ['Shop', 'Tienda'], 'Chat': ['Chat', 'Chat'],
+  'Rua': ['Street', 'Calle'], 'Disputas': ['Fights', 'Disputas'], 'Melhorias': ['Upgrades', 'Mejoras'], 'Calçadão': ['Boardwalk', 'Paseo'],
   // topo
+  'Mapa da cidade': ['City map', 'Mapa de la ciudad'], 'Minha ficha': ['My record', 'Mi ficha'], 'Menu': ['Menu', 'Menú'],
   'Grana': ['Cash', 'Plata'], 'Diamantes': ['Diamonds', 'Diamantes'], 'Procurado': ['Wanted', 'Buscado'], 'Mapa': ['Map', 'Mapa'],
   'Compartilhar': ['Share', 'Compartir'], 'Foto': ['Photo', 'Foto'], 'Ficha': ['Record', 'Ficha'], 'Conta': ['Account', 'Cuenta'], 'Como jogar': ['How to play', 'Cómo jugar'],
   // entrada

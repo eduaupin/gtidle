@@ -151,8 +151,10 @@ export const POINT_BONUS = 0.25;
 
 // ---------------- força do time nos assaltos ----------------
 const memberAt = (level: number) => recruitScore(recruitStats({ speciesId: 'atirador', level, ivs: { hp: 15, atk: 15, def: 15, spd: 15 } }));
-/** Força que um assalto "pede": 3 capangas medianos 2 níveis acima do mínimo */
-export const jobRequirement = (job: Pick<RobberyJob, 'minLevel'>) => 3 * memberAt(Math.min(100, job.minLevel + 2));
+/** Quantos capangas medianos um alvo "pede": 1 no começo (o inicial dá conta), 2 a partir do nível 10, 3 a partir do 25 */
+export const membersFor = (minLevel: number) => (minLevel < 10 ? 1 : minLevel < 25 ? 2 : 3);
+/** Força que um assalto "pede": capangas medianos 2 níveis acima do mínimo */
+export const jobRequirement = (job: Pick<RobberyJob, 'minLevel'>) => membersFor(job.minLevel) * memberAt(Math.min(100, job.minLevel + 2));
 
 export function teamOf(p: PlayerState): Recruit[] {
   const r = p.recruits;
